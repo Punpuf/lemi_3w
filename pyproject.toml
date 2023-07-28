@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "lemi-3w"
+version = "0.1.0"
+description = "Project for developing a model capable of classifying anomalies in the Petrobras 3W dataset."
+authors = ["Marcus Carr <marcus_carr@usp.br>"]
+readme = "README.md"
+packages = [{include = "lemi_3w"}]
+
+[tool.poetry.dependencies]
+python = "~3.9"
+tfx = "^1.13.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
