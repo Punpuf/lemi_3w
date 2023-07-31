@@ -1,6 +1,9 @@
 from __future__ import annotations
 import git
 from rich import console, progress
+import os
+import hashlib
+import pandas as pd
 
 
 class GitRemoteProgress(git.RemoteProgress):
@@ -79,3 +82,27 @@ class GitRemoteProgress(git.RemoteProgress):
                 task_id=self.active_task,
                 message=f"[bright_black]{message}",
             )
+
+
+def get_directory_size(directory) -> int:
+    total_size = 0
+    with os.scandir(directory) as it:
+        for entry in it:
+            if entry.is_file():
+                total_size += entry.stat().st_size
+            elif entry.is_dir():
+                total_size += get_directory_size(entry.path)
+    return total_size  # return size in bytes
+
+
+def sha256sum(data_string: str) -> str:
+    h = hashlib.sha256()
+    h.update(data_string.encode("utf-8"))
+    return h.hexdigest()
+
+
+def get_event(path):
+    event = pd.read_parquet(path)
+    event["timestamp"] = pd.to_datetime(event["timestamp"])
+    event = event.set_index("timestamp", drop=True)
+    return event

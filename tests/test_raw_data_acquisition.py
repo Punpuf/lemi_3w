@@ -31,7 +31,7 @@ def assert_parquet_files_exist(directory):
                     assert file.exists()
 
 
-class TestDataset:
+class TestDataAcquisition:
     """Test cases for raw_data_acquisition.py functions"""
 
     @pytest.fixture(autouse=True)
