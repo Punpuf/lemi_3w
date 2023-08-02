@@ -1,4 +1,4 @@
-from lemi_3w.raw_data_inspector import RawDataInspector, __get_anomaly_metadata
+from lemi_3w.raw_data_inspector import RawDataInspector, get_anomaly_metadata
 from lemi_3w.models import EventMetadata, EventSource, EventClassType
 from constants import utils
 from pathlib import Path
@@ -36,9 +36,9 @@ def test_get_anomaly_metadata():
     file_size = anomaly_file_simu.stat().st_size
 
     # Call the function and check if it returns an instance of EventMetadata
-    event_metadata_real = __get_anomaly_metadata(anomaly_file_real, anomaly_class_type)
-    event_metadata_simu = __get_anomaly_metadata(anomaly_file_simu, anomaly_class_type)
-    event_metadata_draw = __get_anomaly_metadata(anomaly_file_draw, anomaly_class_type)
+    event_metadata_real = get_anomaly_metadata(anomaly_file_real, anomaly_class_type)
+    event_metadata_simu = get_anomaly_metadata(anomaly_file_simu, anomaly_class_type)
+    event_metadata_draw = get_anomaly_metadata(anomaly_file_draw, anomaly_class_type)
 
     assert isinstance(event_metadata_real, EventMetadata)
     assert isinstance(event_metadata_simu, EventMetadata)

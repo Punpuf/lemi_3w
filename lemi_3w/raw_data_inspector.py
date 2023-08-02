@@ -45,7 +45,7 @@ class RawDataInspector:
 
             events.append(
                 parallelbar.progress_starmap(
-                    self.__get_anomaly_metadata,
+                    get_anomaly_metadata,
                     zip(anomaly_folder.iterdir(), repeat(int(anomaly_folder.stem))),
                     total=total_tasks,
                 )
@@ -102,36 +102,35 @@ class RawDataInspector:
 
         return filtered_data
 
-    def __get_anomaly_metadata(
-        anomaly_file: pathlib.Path, class_type: int
-    ) -> EventMetadata:
-        """Returns EventMetadata for a single event given its path"""
 
-        if not anomaly_file.suffix == PARQUET_EXTENSION:
-            return
+def get_anomaly_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMetadata:
+    """Returns EventMetadata for a single event given its path"""
 
-        event_metadata = EventMetadata(
-            class_type=EventClassType(class_type).name,
-            path=str(anomaly_file),
+    if not anomaly_file.suffix == PARQUET_EXTENSION:
+        return
+
+    event_metadata = EventMetadata(
+        class_type=EventClassType(class_type).name,
+        path=str(anomaly_file),
+    )
+    event_source = re.search("^[^_]+(?=_)", anomaly_file.stem)[0]
+
+    event_metadata.hash_id = utils.sha256sum(
+        f"{anomaly_file.parent.stem}/{anomaly_file.stem}"
+    )
+    event_metadata.file_size = anomaly_file.stat().st_size
+    # TODO, check if - 1 is needed
+    event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
+
+    if event_source.startswith("WELL"):
+        event_metadata.source = EventSource.REAL.name
+        event_metadata.well_id = int(event_source.removeprefix("WELL-"))
+        event_metadata.timestamp = pd.Timestamp(
+            anomaly_file.stem.removeprefix(f"{event_source}_")
         )
-        event_source = re.search("^[^_]+(?=_)", anomaly_file.stem)[0]
+    elif event_source.startswith("SIMULATED"):
+        event_metadata.source = EventSource.SIMULATED.name
+    elif event_source.startswith("DRAWN"):
+        event_metadata.source = EventSource.HAND_DRAWN.name
 
-        event_metadata.hash_id = utils.sha256sum(
-            f"{anomaly_file.parent.stem}/{anomaly_file.stem}"
-        )
-        event_metadata.file_size = anomaly_file.stat().st_size
-        # TODO, check if - 1 is needed
-        event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
-
-        if event_source.startswith("WELL"):
-            event_metadata.source = EventSource.REAL.name
-            event_metadata.well_id = int(event_source.removeprefix("WELL-"))
-            event_metadata.timestamp = pd.Timestamp(
-                anomaly_file.stem.removeprefix(f"{event_source}_")
-            )
-        elif event_source.startswith("SIMULATED"):
-            event_metadata.source = EventSource.SIMULATED.name
-        elif event_source.startswith("DRAWN"):
-            event_metadata.source = EventSource.HAND_DRAWN.name
-
-        return event_metadata
+    return event_metadata

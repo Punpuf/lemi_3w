@@ -6,6 +6,11 @@ import hashlib
 import pandas as pd
 
 
+##########################
+# Raw data manager modules
+##########################
+
+
 class GitRemoteProgress(git.RemoteProgress):
     """Terminal progress indicator for GitPython repo clone. By @lcnittl."""
 
