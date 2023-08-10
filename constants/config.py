@@ -1,7 +1,7 @@
 import pathlib
 
 # General project directories
-DIR_PROJECT_ROOT = pathlib.Path.cwd().parent
+DIR_PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIR_PROJECT_DATA = DIR_PROJECT_ROOT / "data"
 DIR_PROJECT_CACHE = DIR_PROJECT_ROOT / ".cache"
 
@@ -13,6 +13,8 @@ DIR_RAW_DATASET = DIR_DOWNLOADED_REPO / "dataset"
 
 DIR_CONVERTED_DATASET = DIR_PROJECT_DATA / "dataset_converted"
 PATH_DATA_INSPECTOR_CACHE = DIR_PROJECT_CACHE / "data_inspector_cache.parquet"
+
+DIR_CONVERTED_DATASET_MOCK_TEST = DIR_PROJECT_DATA / "dataset_mock_test"
 
 ############# Pipeline module #############
 

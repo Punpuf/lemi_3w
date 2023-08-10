@@ -1,4 +1,4 @@
-from lemi_3w.raw_data_acquisition import (
+from raw_data_manager.raw_data_acquisition import (
     has_converted_data,
     create_output_directories,
     convert_csv_to_parquet,

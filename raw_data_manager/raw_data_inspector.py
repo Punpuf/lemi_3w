@@ -1,6 +1,6 @@
 import pandas as pd
 from constants import utils
-from lemi_3w.models import EventMetadata, EventSource, EventClassType
+from raw_data_manager.models import EventMetadata, EventSource, EventClassType
 import os
 import re
 import pathlib
