@@ -2,15 +2,20 @@ from absl import logging
 from constants import config, utils
 import pandas as pd
 import pathlib
+import tempfile
 import shutil
 from git.repo.base import Repo
 import parallelbar
+import configparser
+import urllib.request
+import re
 
 
 URL_3W_REPO = config.URL_3W_REPO
+URL_3W_CONFIG_FILE = config.URL_3W_DATASET_CONFIG_FILE
+DIR_DATA = config.DIR_PROJECT_DATA
 DIR_DOWNLOADED_REPO = config.DIR_DOWNLOADED_REPO
 DIR_RAW_DATASET = config.DIR_RAW_DATASET
-DIR_CONVERTED_DATASET = config.DIR_CONVERTED_DATASET
 
 CSV_EXTENSION = ".csv"
 PARQUET_EXTENSION = ".parquet"
@@ -18,20 +23,129 @@ PARQUET_EXTENSION = ".parquet"
 
 def acquire_dataset_if_needed(
     url_3w_repo: str = URL_3W_REPO,
+    url_3w_dataset_config_file=URL_3W_CONFIG_FILE,
     dir_3w_repo: str = DIR_DOWNLOADED_REPO,
+    dir_data: str = DIR_DATA,
     dir_raw_dataset: str = DIR_RAW_DATASET,
-    dir_converted_dataset: str = DIR_CONVERTED_DATASET,
+    require_latest_version: bool = True,
 ) -> None:
-    """Downloads dataset, and converts its format if not already available"""
-    if has_converted_data(dir_converted_dataset):
-        logging.info("Found existing converted data.")
+    """Downloads dataset, and converts its format if the latest isn't already available"""
+    pathlib.Path(dir_data).mkdir(parents=True, exist_ok=True)
+    dir_latest_local, version_latest_local = get_latest_local_converted_data_version(
+        dir_data
+    )
+
+    latest_dataset_version = fetch_latest_online_dataset_version(
+        url_3w_dataset_config_file
+    )
+    if latest_dataset_version is None:
+        logging.error("Unable to get latest of dataset available online.")
         return
 
-    logging.info("No existing converted data. Attempting to aquire it.")
+    if has_valid_converted_dataset(
+        dir_latest_local,
+        version_latest_local,
+        latest_dataset_version,
+        require_latest_version,
+    ):
+        logging.info(
+            f"Found existing converted data with dataset version of {version_latest_local}"
+        )
+        return
+
+    logging.info(
+        "No existing converted data with the latest version. Attempting to aquire it."
+    )
+
+    dir_converted_dataset = DIR_DATA / (
+        config.DIR_CONVERTED_PREFIX + latest_dataset_version
+    )
+
     download_3w_repo(url_3w_repo, dir_3w_repo)
     create_output_directories(dir_raw_dataset, dir_converted_dataset)
     convert_csv_to_parquet(dir_raw_dataset, dir_converted_dataset)
     delete_3w_repo(dir_3w_repo)
+
+
+def has_valid_converted_dataset(
+    dir_latest_local,
+    version_latest_local,
+    version_latest_online,
+    is_latest_version_required,
+):
+    """Checks if version is the latest, and if data is present"""
+    if dir_latest_local is not None and version_latest_online is not None:
+        if (
+            is_latest_version_required == False
+            or version_latest_online == version_latest_local
+        ):
+            if has_converted_data(dir_latest_local):
+                return True
+    return False
+
+
+def get_dataset_version_from_config_file(dataset_config_file_path: str) -> str:
+    """Returns the dataset version present in a local .ini file"""
+    parser = configparser.ConfigParser()
+    parser.read(dataset_config_file_path)
+    try:
+        return parser["Versions"]["DATASET"]
+    except KeyError:
+        logging.error("Config file has no dataset version data.")
+        return
+
+
+def fetch_latest_online_dataset_version(url_dataset_config_file: str) -> str:
+    """Fetches the latest dataset version present in the online repository"""
+    dataset_config_file_path = pathlib.Path.cwd() / tempfile.mkdtemp() / "config.ini"
+
+    urllib.request.urlretrieve(
+        url=url_dataset_config_file, filename=dataset_config_file_path
+    )
+
+    latest_dataset_version = get_dataset_version_from_config_file(
+        dataset_config_file_path
+    )
+
+    pathlib.Path(dataset_config_file_path).unlink()
+
+    return latest_dataset_version
+
+
+def extract_directory_dataset_version(directory_name: str) -> str:
+    """Extracts dataset version from directory name"""
+    # matches any version with digits and dots
+    regex_pattern = rf"{config.DIR_CONVERTED_PREFIX}(\d+(\.\d+)*)"
+
+    matches = re.search(regex_pattern, directory_name)
+    if matches:
+        return matches.group(1)
+
+    return None
+
+
+def get_latest_local_converted_data_version(dir_data: str) -> (pathlib.Path, str):
+    base_directory = pathlib.Path(dir_data)
+    directories = [d for d in base_directory.iterdir() if d.is_dir()]
+
+    max_version = None
+    max_version_directory = None
+
+    # Iterate over directories and find the one with the biggest version
+    for directory in directories:
+        version = extract_directory_dataset_version(directory.name)
+        if version:
+            if max_version is None or version > max_version:
+                max_version = version
+                max_version_directory = directory
+
+    if max_version_directory:
+        logging.info("Directory with the biggest version:", max_version_directory)
+        logging.info("Version:", max_version)
+        return max_version_directory, max_version
+    else:
+        logging.info("No directory with matching version found.")
+        return None, None
 
 
 def has_converted_data(path_converted_data: str) -> bool:

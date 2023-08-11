@@ -1,9 +1,14 @@
 from raw_data_manager.raw_data_acquisition import (
+    has_valid_converted_dataset,
+    get_dataset_version_from_config_file,
     has_converted_data,
+    extract_directory_dataset_version,
+    get_latest_local_converted_data_version,
     create_output_directories,
     convert_csv_to_parquet,
     delete_3w_repo,
 )
+from raw_data_manager import raw_data_acquisition
 from constants import config
 
 import pytest
@@ -11,6 +16,7 @@ import pandas as pd
 import tempfile
 import shutil
 from pathlib import Path
+import configparser
 
 
 def create_sample_csv(file_path):
@@ -45,6 +51,31 @@ class TestDataAcquisition:
         # Clean up after each test
         config.DIR_DOWNLOADED_REPO = self.original_dir_downloaded_repo
         shutil.rmtree(self.temp_dir)
+
+    def test_get_dataset_version_from_config_file_with_data(self):
+        # Creating test config data
+        config_file_path = Path(self.temp_dir) / "config.ini"
+        dataset_version = "12.3.4"
+        config = configparser.ConfigParser()
+        config["Versions"] = {"DATASET": dataset_version}
+        with open(str(config_file_path), "w") as configfile:
+            config.write(configfile)
+
+        # Testing function
+        result_version = get_dataset_version_from_config_file(str(config_file_path))
+        assert result_version == dataset_version
+
+    def test_get_dataset_version_from_config_file_no_data(self):
+        # Creating test config data
+        config_file_path = Path(self.temp_dir) / "config.ini"
+        config = configparser.ConfigParser()
+        config["Weather"] = {"RAINS": "Today"}
+        with open(str(config_file_path), "w") as configfile:
+            config.write(configfile)
+
+        # Testing function
+        result_version = get_dataset_version_from_config_file(str(config_file_path))
+        assert result_version == None
 
     def test_has_converted_data_no_data(self):
         assert not has_converted_data(self.temp_dir)
@@ -112,3 +143,122 @@ class TestDataAcquisition:
 
         # Check if the .git folder is deleted
         assert not Path(download_dir).exists()
+
+
+class TestHasValidConvertedDataset:
+    """Test cases for the has_valid_converted_dataset function"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, monkeypatch):
+        def mock_has_converted_data(directory):
+            return True
+
+        # Monkey-patching the original function with the mock
+        monkeypatch.setattr(
+            raw_data_acquisition, "has_converted_data", mock_has_converted_data
+        )
+
+    # Define test cases
+    @pytest.mark.parametrize(
+        "dir_latest_local, version_latest_local, version_latest_online, is_latest_version_required, expected_result",
+        [
+            ("/path/to/data", "1.0", "1.0", True, True),
+            ("/path/to/data", "1.0", "1.1", False, True),
+            ("/path/to/data", "1.0", "1.1", True, False),
+            (None, None, "1.0", False, False),
+        ],
+    )
+    def test_has_valid_converted_dataset(
+        self,
+        dir_latest_local,
+        version_latest_local,
+        version_latest_online,
+        is_latest_version_required,
+        expected_result,
+    ):
+        # Call the function being tested
+        result = has_valid_converted_dataset(
+            dir_latest_local,
+            version_latest_local,
+            version_latest_online,
+            is_latest_version_required,
+        )
+
+        # Check the result against the expected outcome
+        assert result == expected_result
+
+
+class TestExtractDirectoryDatasetVersion:
+    """Test cases for the extract_directory_dataset_version function"""
+
+    @pytest.mark.parametrize(
+        "directory, expected_result",
+        [
+            (f"{config.DIR_CONVERTED_PREFIX}2.1.3", "2.1.3"),
+            (f"{config.DIR_CONVERTED_PREFIX}3.10.5", "3.10.5"),
+            (f"{config.DIR_CONVERTED_PREFIX}1.11", "1.11"),
+            (f"{config.DIR_CONVERTED_PREFIX}2", "2"),
+            ("olha_a_pamonha", None),
+            ("pamonha_caseira_v2.0.4", None),
+            ("pamonha_fresquinha_v1.0", None),
+        ],
+    )
+    def test_extract_directory_dataset_version(self, directory, expected_result):
+        result = extract_directory_dataset_version(directory)
+        assert result == expected_result
+
+
+class TestGetLatestLocalConvertedDataVersion:
+    """Test cases for the get_latest_local_converted_data_version function"""
+
+    @pytest.mark.parametrize(
+        "dir_data, directories, expected_directory, expected_version",
+        [
+            ("/path/to/data", [], None, None),
+            (
+                "/path/to/data",
+                [Path("converted_dataset_1.0")],
+                Path("converted_dataset_1.0"),
+                "1.0",
+            ),
+            (
+                "/path/to/data",
+                [Path("converted_dataset_1.0"), Path("converted_dataset_2.0")],
+                Path("converted_dataset_2.0"),
+                "2.0",
+            ),
+            ("/path/to/data", [Path("some_other_directory")], None, None),
+        ],
+    )
+    def test_get_latest_local_converted_data_version(
+        self, dir_data, directories, expected_directory, expected_version, monkeypatch
+    ):
+        def mock_extract_directory_dataset_version(directory_name):
+            if directory_name == "converted_dataset_1.0":
+                return "1.0"
+            elif directory_name == "converted_dataset_2.0":
+                return "2.0"
+            else:
+                return None
+
+        monkeypatch.setattr(
+            raw_data_acquisition,
+            "extract_directory_dataset_version",
+            mock_extract_directory_dataset_version,
+        )
+
+        def mock_iterdir(_):
+            return directories
+
+        def mock_is_dir(_):
+            return True
+
+        monkeypatch.setattr(Path, "iterdir", mock_iterdir)
+        monkeypatch.setattr(Path, "is_dir", mock_is_dir)
+
+        # Call the function being tested
+        directory, version = get_latest_local_converted_data_version(dir_data)
+
+        # Check the result against the expected outcome
+        assert directory == expected_directory
+        assert version == expected_version
