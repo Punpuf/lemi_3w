@@ -25,3 +25,6 @@ poetry.lock
 # Ignore any other sensitive or unnecessary files and directories
 data/
 template/
+
+poetry
+pyvenv.cfg
