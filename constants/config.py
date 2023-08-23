@@ -17,11 +17,22 @@ DIR_RAW_DATASET = DIR_DOWNLOADED_REPO / "dataset"
 DIR_CONVERTED_PREFIX = "dataset_converted_v"
 PATH_DATA_INSPECTOR_CACHE = DIR_PROJECT_CACHE / "data_inspector_cache.parquet"
 
-DIR_CONVERTED_DATASET_MOCK_TEST = DIR_PROJECT_DATA / "dataset_mock_test"
+DIR_CONVERTED_TEST_PREFIX = "test_dataset_converted_v"
 
 ############# Pipeline module #############
-
-PIPELINE_NAME = "pipeline_lemi_3w"
-PIPELINE_ROOT = DIR_PROJECT_DATA / "pipeline_lemi_3w_output"
-METADATA_PATH = DIR_PROJECT_DATA / "tfx_metadata" / "metadata.db"
 ENABLE_CACHE = True
+
+PIPELINE_ROOT = DIR_PROJECT_DATA / "pipeline"
+METADATA_ROOT = DIR_PROJECT_DATA / "metadata"
+SERVING_ROOT = DIR_PROJECT_DATA / "serving_model"
+
+# Schema validaion pipeline
+SCHEMA_PIPELINE_NAME = "pipeline_lemi_3w_schema"
+SCHEMA_PIPELINE_ROOT = PIPELINE_ROOT / SCHEMA_PIPELINE_NAME
+SCHEMA_METADATA_PATH = METADATA_ROOT / SCHEMA_PIPELINE_NAME / "metadata.db"
+
+# Model generation pipeline
+MODEL_PIPELINE_NAME = "pipeline_lemi_3w_model"
+MODEL_PIPELINE_ROOT = PIPELINE_ROOT / MODEL_PIPELINE_NAME
+MODEL_PIPELINE_METADATA_PATH = METADATA_ROOT / MODEL_PIPELINE_NAME / "metadata.db"
+MODEL_PIPELINE_SERVING_DIR = SERVING_ROOT / MODEL_PIPELINE_NAME

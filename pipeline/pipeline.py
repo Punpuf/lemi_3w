@@ -10,13 +10,18 @@ from tfx.v1 import proto
 from tfx.dsl.components.base import executor_spec
 
 
-PIPELINE_NAME = config.PIPELINE_NAME
-PIPELINE_ROOT = str(config.PIPELINE_ROOT)
-METADATA_PATH = str(config.METADATA_PATH)
-ENABLE_CACHE = False  # TODO config.ENABLE_CACHE
-RAW_DATA_DIR = str(
-    config.DIR_CONVERTED_DATASET_MOCK_TEST
-)  # TODO config.DIR_CONVERTED_DATASET
+# PIPELINE_NAME = config.MODEL_PIPELINE_NAME
+# PIPELINE_ROOT = str(config.PIPELINE_ROOT)
+# METADATA_PATH = str(config.METADATA_PATH)
+# ENABLE_CACHE = False  # TODO config.ENABLE_CACHE
+
+DATA_DIR = str(config.DIR_PROJECT_DATA)
+
+""" RAW_DATA_DIR = str(
+    config.DIR_CONVERTED_TEST_PREFIX
+) """  # TODO config.DIR_CONVERTED_DATASET
+
+DIR_CONVERTED_PREFIX = config.DIR_CONVERTED_TEST_PREFIX  # config.DIR_CONVERTED_PREFIX
 
 
 def create_pipeline(
@@ -30,13 +35,16 @@ def create_pipeline(
 
     input_configuration = proto.Input(
         splits=[
-            proto.Input.Split(name="raw_data", pattern="{SPAN}/*.parquet"),
+            proto.Input.Split(
+                name="raw_data",
+                pattern=DIR_CONVERTED_PREFIX + "{SPAN}/*/*.parquet",
+            ),
         ]
     )
     output_configuration = proto.Output(
         split_config=proto.SplitConfig(
             splits=[
-                proto.SplitConfig.Split(name="train", hash_buckets=3),
+                proto.SplitConfig.Split(name="train", hash_buckets=4),
                 proto.SplitConfig.Split(name="eval", hash_buckets=1),
             ],
         )
@@ -44,11 +52,11 @@ def create_pipeline(
 
     example_gen = FileBasedExampleGen(
         custom_executor_spec=executor_spec.BeamExecutorSpec(parquet_executor.Executor),
-        input_base=RAW_DATA_DIR,
+        input_base=DATA_DIR,
         input_config=input_configuration,
         output_config=output_configuration,
     )
-
+    logging.info(f"exampleGen example uri is {example_gen.outputs['examples']}")
     components.append(example_gen)
 
     return tfx.dsl.Pipeline(
@@ -63,11 +71,11 @@ def create_pipeline(
 
 def run_pipeline():
     pipeline_lemi_3w = create_pipeline(
-        pipeline_name=PIPELINE_NAME,
-        pipeline_root=PIPELINE_ROOT,
-        enable_cache=ENABLE_CACHE,
+        pipeline_name=config.SCHEMA_PIPELINE_NAME,
+        pipeline_root=str(config.SCHEMA_PIPELINE_ROOT),
+        enable_cache=False,  # ENABLE_CACHE,
         metadata_connection_config=tfx.orchestration.metadata.sqlite_metadata_connection_config(
-            str(METADATA_PATH)
+            str(config.SCHEMA_METADATA_PATH)
         ),
     )
 

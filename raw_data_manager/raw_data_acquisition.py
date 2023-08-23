@@ -58,7 +58,8 @@ def acquire_dataset_if_needed(
     )
 
     dir_converted_dataset = DIR_DATA / (
-        config.DIR_CONVERTED_PREFIX + latest_dataset_version
+        config.DIR_CONVERTED_PREFIX
+        + utils.version_string_to_number(latest_dataset_version)
     )
 
     download_3w_repo(url_3w_repo, dir_3w_repo)

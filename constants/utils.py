@@ -111,3 +111,11 @@ def get_event(path):
     event["timestamp"] = pd.to_datetime(event["timestamp"])
     event = event.set_index("timestamp", drop=True)
     return event
+
+
+def version_string_to_number(version: str) -> int:
+    components = version.split(".")
+    version_number = (
+        int(components[0]) * 10000 + int(components[1]) * 100 + int(components[2])
+    )
+    return version_number
