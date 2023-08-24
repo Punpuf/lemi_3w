@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("..")  # Allows imports from sibling directories
+
 from raw_data_manager.raw_data_acquisition import (
     has_valid_converted_dataset,
     get_dataset_version_from_config_file,

@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("..")  # Allows imports from sibling directories
+
 from absl import logging
 from constants import config, utils
 import pandas as pd
@@ -9,6 +13,7 @@ import parallelbar
 import configparser
 import urllib.request
 import re
+import os
 
 
 URL_3W_REPO = config.URL_3W_REPO
@@ -34,18 +39,21 @@ def acquire_dataset_if_needed(
     dir_latest_local, version_latest_local = get_latest_local_converted_data_version(
         dir_data
     )
+    logging.info(f"Latest local version is {version_latest_local}")
 
-    latest_dataset_version = fetch_latest_online_dataset_version(
+    latest_dataset_version_online = fetch_latest_online_dataset_version(
         url_3w_dataset_config_file
     )
-    if latest_dataset_version is None:
+    logging.info(f"Latest online version is {latest_dataset_version_online}")
+
+    if latest_dataset_version_online is None:
         logging.error("Unable to get latest of dataset available online.")
         return
 
     if has_valid_converted_dataset(
         dir_latest_local,
         version_latest_local,
-        latest_dataset_version,
+        latest_dataset_version_online,
         require_latest_version,
     ):
         logging.info(
@@ -59,7 +67,7 @@ def acquire_dataset_if_needed(
 
     dir_converted_dataset = DIR_DATA / (
         config.DIR_CONVERTED_PREFIX
-        + utils.version_string_to_number(latest_dataset_version)
+        + utils.version_string_to_number(latest_dataset_version_online)
     )
 
     download_3w_repo(url_3w_repo, dir_3w_repo)
@@ -99,10 +107,11 @@ def get_dataset_version_from_config_file(dataset_config_file_path: str) -> str:
 def fetch_latest_online_dataset_version(url_dataset_config_file: str) -> str:
     """Fetches the latest dataset version present in the online repository"""
     dataset_config_file_path = pathlib.Path.cwd() / tempfile.mkdtemp() / "config.ini"
+    logging.info(f"Going to fetch config file from ${url_dataset_config_file}")
 
-    urllib.request.urlretrieve(
-        url=url_dataset_config_file, filename=dataset_config_file_path
-    )
+    result = os.popen(f"curl {url_dataset_config_file}").read()
+    with open(dataset_config_file_path, "w") as f:
+        f.write(result)
 
     latest_dataset_version = get_dataset_version_from_config_file(
         dataset_config_file_path
@@ -110,7 +119,7 @@ def fetch_latest_online_dataset_version(url_dataset_config_file: str) -> str:
 
     pathlib.Path(dataset_config_file_path).unlink()
 
-    return latest_dataset_version
+    return utils.version_string_to_number(latest_dataset_version)
 
 
 def extract_directory_dataset_version(directory_name: str) -> str:
@@ -127,7 +136,7 @@ def extract_directory_dataset_version(directory_name: str) -> str:
 
 def get_latest_local_converted_data_version(dir_data: str) -> (pathlib.Path, str):
     base_directory = pathlib.Path(dir_data)
-    directories = [d for d in base_directory.iterdir() if d.is_dir()]
+    directories = [dir for dir in base_directory.iterdir() if dir.is_dir()]
 
     max_version = None
     max_version_directory = None
@@ -141,8 +150,8 @@ def get_latest_local_converted_data_version(dir_data: str) -> (pathlib.Path, str
                 max_version_directory = directory
 
     if max_version_directory:
-        logging.info("Directory with the biggest version:", max_version_directory)
-        logging.info("Version:", max_version)
+        logging.info(f"Directory with the biggest version: {max_version_directory}")
+        logging.info(f"Version: {max_version}")
         return max_version_directory, max_version
     else:
         logging.info("No directory with matching version found.")

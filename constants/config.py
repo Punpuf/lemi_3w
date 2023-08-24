@@ -9,7 +9,7 @@ DIR_PROJECT_CACHE = DIR_PROJECT_ROOT / ".cache"
 
 URL_3W_REPO = "https://github.com/petrobras/3W.git"
 URL_3W_DATASET_CONFIG_FILE = (
-    "https://github.com/petrobras/3W/raw/main/dataset/dataset.ini"
+    "https://raw.githubusercontent.com/petrobras/3W/main/dataset/dataset.ini"
 )
 DIR_DOWNLOADED_REPO = DIR_PROJECT_DATA / "3w_repo"
 DIR_RAW_DATASET = DIR_DOWNLOADED_REPO / "dataset"

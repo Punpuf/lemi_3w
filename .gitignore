@@ -28,3 +28,4 @@ template/
 
 poetry
 pyvenv.cfg
+.cache/

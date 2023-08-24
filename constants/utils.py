@@ -113,9 +113,9 @@ def get_event(path):
     return event
 
 
-def version_string_to_number(version: str) -> int:
+def version_string_to_number(version: str) -> str:
     components = version.split(".")
     version_number = (
         int(components[0]) * 10000 + int(components[1]) * 100 + int(components[2])
     )
-    return version_number
+    return str(version_number)

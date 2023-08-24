@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("..")  # Allows imports from sibling directories
+
 from raw_data_manager.raw_data_inspector import RawDataInspector, get_anomaly_metadata
 from raw_data_manager.models import EventMetadata, EventSource, EventClassType
 from constants import utils

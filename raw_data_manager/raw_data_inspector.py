@@ -89,6 +89,7 @@ class RawDataInspector:
         self,
         class_types: list[EventClassType] = None,
         sources: list[EventSource] = None,
+        well_ids: list[int] = None,
     ) -> pd.DataFrame:
         """Returns DataFrame with metadata, optionally filtered by class type or source"""
 
@@ -99,6 +100,9 @@ class RawDataInspector:
 
         if sources is not None:
             filtered_data = filtered_data[filtered_data.source.isin(sources)]
+
+        if well_ids is not None:
+            filtered_data = filtered_data[filtered_data.well_id.isin(well_ids)]
 
         return filtered_data
 
