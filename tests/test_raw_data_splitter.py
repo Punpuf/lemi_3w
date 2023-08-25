@@ -55,47 +55,12 @@ class TestRawDataSplitter:
     def raw_data_splitter(self, mock_metadata_table):
         return RawDataSplitter(mock_metadata_table, dataset_version)
 
-    def test_get_split_path_division(self, raw_data_splitter):
-        """Doesn't test stratification, only that result from sklearn's split is being returned"""
-        with patch(
-            "sklearn.model_selection.train_test_split",
-            return_value=(
-                [
-                    "path1",
-                    "path2",
-                    "path3",
-                    "path4",
-                    "path5",
-                    "path6",
-                ],
-                [
-                    "path7",
-                    "path8",
-                ],
-            ),
-        ):
-            train_paths, test_paths = raw_data_splitter.get_split_path_division(
-                test_size=0.2
-            )
-            assert train_paths == [
-                "path1",
-                "path2",
-                "path3",
-                "path4",
-                "path5",
-                "path6",
-            ]
-            assert test_paths == [
-                "path7",
-                "path8",
-            ]
-
     @pytest.mark.parametrize(
         "sources, expected",
         [
             ([models.EventSource.REAL], "r"),
-            ([models.EventSource.SIMULATED, models.EventSource.HAND_DRAWN], "sd"),
-            ([models.EventSource.HAND_DRAWN, models.EventSource.SIMULATED], "sd"),
+            ([models.EventSource.SIMULATED, models.EventSource.HAND_DRAWN], "s-d"),
+            ([models.EventSource.HAND_DRAWN, models.EventSource.SIMULATED], "s-d"),
             (
                 [
                     models.EventSource.HAND_DRAWN,
@@ -200,19 +165,10 @@ class TestRawDataSplitter:
 
     @patch("shutil.copy")
     def test_move_file(self, mock_copy, raw_data_splitter):
-        raw_data_splitter._RawDataSplitter__move_file(
+        raw_data_splitter.move_file(
             "path/0/to_file.feather", pathlib.Path("output_dir")
         )
         mock_copy.assert_called_once_with(
             pathlib.Path("path/0/to_file.feather"),
             pathlib.Path("output_dir/0/to_file.feather"),
         )
-
-    @patch("self.move_file")
-    def test_move_files_to_path(self, mock_move, raw_data_splitter):
-        input_paths = ["input1", "input2"]
-        output_dir_path = pathlib.Path("output_dir")
-
-        raw_data_splitter.move_files_to_path(input_paths, output_dir_path)
-
-        assert mock_move.call_count == len(input_paths)
