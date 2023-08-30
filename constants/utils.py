@@ -4,6 +4,8 @@ from rich import console, progress
 import os
 import hashlib
 import pandas as pd
+from pathlib import Path
+import pickle
 
 
 ##########################
@@ -119,3 +121,26 @@ def version_string_to_number(version: str) -> str:
         int(components[0]) * 10000 + int(components[1]) * 100 + int(components[2])
     )
     return str(version_number)
+
+
+path_saved = "saved_data"
+
+
+def save_retrieve_object(file_name, funct, arg_list=[], use_cached=True):
+    """Caches a functions's result, allowing it to be quickly returned."""
+    full_path = f"{path_saved}/{file_name}"
+    if (not use_cached) or (not os.path.exists(full_path)):
+        Path(full_path).unlink(missing_ok=True)
+
+        result = funct(*arg_list)
+
+        os.makedirs(path_saved, exist_ok=True)
+        dbfile = open(full_path, "ab")
+        pickle.dump(result, dbfile)
+        dbfile.close()
+
+    # load saved data
+    dbfile = open(full_path, "rb")
+    result = pickle.load(dbfile)
+    dbfile.close()
+    return result

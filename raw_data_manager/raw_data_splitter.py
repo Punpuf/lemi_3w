@@ -2,7 +2,7 @@ import sys
 
 sys.path.append("..")  # Allows imports from sibling directories
 
-from raw_data_manager import models, raw_data_acquisition
+from raw_data_manager import models
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import pathlib
@@ -124,7 +124,7 @@ class RawDataSplitter:
         class_types: list[models.EventClassType] = None,
         sources: list[models.EventSource] = None,
         well_ids: list[int] = None,
-    ) -> (str, str):
+    ) -> Tuple[str, str]:
         """Returns a name describing the modifications made to the data, used as output folder name"""
         split_name = "dataset_converted_v" + self.__data_version + "_"
         split_name += "split-" + str(int(test_size * 100)) + "_"

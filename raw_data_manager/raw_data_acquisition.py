@@ -14,6 +14,7 @@ import configparser
 import urllib.request
 import re
 import os
+from typing import Tuple
 
 
 URL_3W_REPO = config.URL_3W_REPO
@@ -133,7 +134,7 @@ def extract_directory_dataset_version(directory_name: str) -> str:
     return None
 
 
-def get_latest_local_converted_data_version(dir_data: str) -> (pathlib.Path, str):
+def get_latest_local_converted_data_version(dir_data: str) -> Tuple[pathlib.Path, str]:
     base_directory = pathlib.Path(dir_data)
     directories = [dir for dir in base_directory.iterdir() if dir.is_dir()]
 
