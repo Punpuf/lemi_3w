@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+
 import git
 from rich import console, progress
 import os
@@ -6,6 +8,7 @@ import hashlib
 import pandas as pd
 from pathlib import Path
 import pickle
+from constants import config
 
 
 ##########################
@@ -126,15 +129,17 @@ def version_string_to_number(version: str) -> str:
 path_saved = "saved_data"
 
 
-def save_retrieve_object(file_name, funct, arg_list=[], use_cached=True):
+def save_retrieve_object(
+    file_name: str, funct, arg_list: list = [], use_cached: bool = True
+) -> any:
     """Caches a functions's result, allowing it to be quickly returned."""
-    full_path = f"{path_saved}/{file_name}"
-    if (not use_cached) or (not os.path.exists(full_path)):
-        Path(full_path).unlink(missing_ok=True)
+    full_path = config.DIR_SAVED_OBJECTS / f"{file_name}.pickle"
+    if (not use_cached) or (not full_path.exists()):
+        full_path.unlink(missing_ok=True)
 
         result = funct(*arg_list)
 
-        os.makedirs(path_saved, exist_ok=True)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
         dbfile = open(full_path, "ab")
         pickle.dump(result, dbfile)
         dbfile.close()

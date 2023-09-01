@@ -5,6 +5,8 @@ DIR_PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 DIR_PROJECT_DATA = DIR_PROJECT_ROOT / "data"
 DIR_PROJECT_CACHE = DIR_PROJECT_ROOT / ".cache"
 
+DIR_SAVED_OBJECTS = DIR_PROJECT_CACHE / "saved_objects"
+
 ####### Raw data manager module #######
 
 URL_3W_REPO = "https://github.com/petrobras/3W.git"
@@ -36,3 +38,7 @@ MODEL_PIPELINE_NAME = "pipeline_lemi_3w_model"
 MODEL_PIPELINE_ROOT = PIPELINE_ROOT / MODEL_PIPELINE_NAME
 MODEL_PIPELINE_METADATA_PATH = METADATA_ROOT / MODEL_PIPELINE_NAME / "metadata.db"
 MODEL_PIPELINE_SERVING_DIR = SERVING_ROOT / MODEL_PIPELINE_NAME
+
+
+############# Exploration module #############
+CACHE_NAME_TRAIN_MEAN_STD_DEV = "train-split"
