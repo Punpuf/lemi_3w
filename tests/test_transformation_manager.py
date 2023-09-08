@@ -260,3 +260,80 @@ def test_transform_event_with_downsample():
     assert event_1_transformed_inteval_5s.astype(float).equals(
         event_1_expected_inteval_5s.astype(float)
     )
+
+
+def test_transform_event_with_timestep_windows():
+    event_1_original = pd.DataFrame(
+        {
+            "P-PDG": [10, 20, 30, 40, 50, 60],
+            "P-TPT": [20, 40, 60, 80, 100, 120],
+            "T-TPT": [100, 200, 300, 400, 500, 600],
+            "P-MON-CKP": [10, 20, 30, 40, 50, 60],
+            "T-JUS-CKP": [20, 40, 60, 80, 100, 120],
+            "P-JUS-CKGL": [100, 200, 300, 400, 500, 600],
+            "QGL": [1, 2, 3, 4, 5, 6],
+            "class": [0, 0, 0, 0, 4, 4],
+        }
+    )
+    (
+        X_event1_2step_window,
+        y_event1_2step_window,
+    ) = TransformationManager.transform_event_with_timestep_windows(event_1_original, 2)
+    (
+        X_event1_3step_window,
+        y_event1_3step_window,
+    ) = TransformationManager.transform_event_with_timestep_windows(event_1_original, 3)
+    (
+        X_event1_5step_window,
+        y_event1_5step_window,
+    ) = TransformationManager.transform_event_with_timestep_windows(event_1_original, 5)
+
+    print(f"2 steps: {X_event1_2step_window, y_event1_2step_window}\n\n")
+    print(f"3 steps: {X_event1_3step_window, y_event1_3step_window}\n\n")
+    print(f"5 steps: {X_event1_5step_window, y_event1_5step_window}\n\n")
+
+    assert len(X_event1_2step_window) == 5
+    assert len(y_event1_2step_window) == 5
+    assert (
+        y_event1_2step_window[-1].astype(float)
+        == np.array(
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        )
+    ).all()
+
+    assert len(X_event1_3step_window) == 4
+    assert len(y_event1_3step_window) == 4
+
+    assert len(X_event1_5step_window) == 2
+    assert len(y_event1_5step_window) == 2
+    assert (
+        X_event1_5step_window
+        == np.array(
+            [
+                [
+                    [10, 20, 100, 10, 20, 100, 1],
+                    [20, 40, 200, 20, 40, 200, 2],
+                    [30, 60, 300, 30, 60, 300, 3],
+                    [40, 80, 400, 40, 80, 400, 4],
+                    [50, 100, 500, 50, 100, 500, 5],
+                ],
+                [
+                    [20, 40, 200, 20, 40, 200, 2],
+                    [30, 60, 300, 30, 60, 300, 3],
+                    [40, 80, 400, 40, 80, 400, 4],
+                    [50, 100, 500, 50, 100, 500, 5],
+                    [60, 120, 600, 60, 120, 600, 6],
+                ],
+            ]
+        )
+    ).all()

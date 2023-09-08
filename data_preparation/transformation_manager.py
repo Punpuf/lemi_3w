@@ -1,19 +1,23 @@
-# class that receives metadata table
-
-# can call a prepration function
-# fc will make a folder into which it will save the files after applying transformations
-# fc will run a function over all the paths
-
-# each processing function will apply the 3 transformation functions
-# then save file to path
 from absl import logging
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from constants import module_constants
+from typing import Tuple
+from tensorflow import keras
 
 
 class TransformationManager:
+    """Manages transformation of events present in a metadata table"""
+
+    # class that receives metadata table
+
+    # can call a prepration function
+    # fc will make a folder into which it will save the files after applying transformations
+    # fc will run a function over all the paths
+
+    # each processing function will apply the 3 transformation functions
+    # then save file to path
     def __init__(self, metadata_table: pd.DataFrame, folder_name: str) -> None:
         self.__metadata_table = metadata_table
         self.folder_name = folder_name
@@ -23,7 +27,7 @@ class TransformationManager:
         )
         return
 
-    def tranform_table_with_imput_std_time(self, output_parent_dir: Path) -> None:
+    def apply_transformations_to_table(self, output_parent_dir: Path) -> None:
         TRANSFORMATION_NAME_PREFIX = "transform-imp-std_tim-"
         output_dir: Path = (
             output_parent_dir / TRANSFORMATION_NAME_PREFIX + self.folder_name
@@ -34,7 +38,7 @@ class TransformationManager:
         # apply function to all of them
 
     @staticmethod
-    def transform_event_with_imput_std_time(
+    def apply_transformations_to_event(
         event_path: Path,
         sample_interval_seconds,
         avg_variable_mean: pd.Series,
@@ -64,6 +68,9 @@ class TransformationManager:
         # get time windows
 
         # store results
+        new_path = event_path.replace(input_folder, output_folder).replace(
+            ".feather", ".npy"
+        )
 
     @staticmethod
     def transform_event_with_imputation(
@@ -151,7 +158,7 @@ class TransformationManager:
     ) -> pd.DataFrame:
         """Process an event by downsampling its values
 
-        Explain how it will handle null values.
+        Downsampling is done by using mean of non null values.
 
         Parameters
          ----------
@@ -173,66 +180,79 @@ class TransformationManager:
     @staticmethod
     def transform_event_with_timestep_windows(
         event_data: pd.DataFrame, num_timesteps: int
-    ) -> pd.DataFrame:
-        # input data: multivariate
-        # output: X window of multiple steps of multivariate data
-        # y is class of current step
-        X = get_sequence_in_from_event(event_data)
-        y = get_prediction_out_from_event(event_data)
+    ) -> Tuple[np.array, np.array]:
+        """Process an event by generating windowed samples
 
-        # if y is None:
-        #     print('there was error, bad class data, with event @ ', event_path)
-        #     return
+        Parameters
+         ----------
+        event_data: pandas.DataFrame
+            Data of an event (corresponds to a single .csv file).
+        num_timesteps: int
+            Number of timesteps to use for each window sample.
 
-        X_split, y_split = split_sequences(X, y, num_timesteps)
+        Returns
+        -------
+        np.array
+            X: Array of window samples with input features.
+        np.array
+            y: Array of corresponding targets.
+        """
 
-        new_path = event_path.replace(input_folder, output_folder).replace(
-            ".feather", ".npy"
+        num_rows = event_data.shape[0]
+        numeric_column_name_list = event_data[
+            module_constants.event_num_attribs
+        ].columns
+
+        input_sequences = np.hstack(
+            [
+                np.array(event_data[c]).reshape((num_rows, 1))
+                for c in numeric_column_name_list
+            ]
+        )
+        output_sequece = np.array(event_data[module_constants.event_class_attrib])
+
+        return TransformationManager.split_sequences(
+            input_sequences, output_sequece, num_timesteps
         )
 
+    @staticmethod
+    def split_sequences(
+        sequences_input: np.array, sequence_output: np.array, num_timesteps: int
+    ) -> Tuple[np.array, np.array]:
+        """Splits a multivariate sequence into windowed samples
 
-# input is event data
-# output is the data of features that will be used for making predictions
-# output is formatted for split_sequences function
-def get_sequence_in_from_event(event):
-    in_array_list = []
-    x = 1
-    for col_name, col_data in event[module_constants.event_num_attribs].iteritems():
-        in_seq = np.array(col_data)
-        in_array_list.append(in_seq.reshape((len(in_seq), 1)))
+        Parameters
+         ----------
+        sequences_input: np.array
+            Sequence with input features (temperature, pressure, flow).
+        sequence_output: np.array
+            Sequence with the output (class types), target.
+        num_timesteps: int
+            Number of timesteps to use for each window sample.
 
-    return np.hstack(tuple(in_array_list))
+        Returns
+        -------
+        np.array
+            X: Array of window samples with input features.
+        np.array
+            y: Array of corresponding targets.
+        """
+        X, y = list(), list()
 
+        for i in range(len(sequences_input)):
+            # find the end of this pattern
+            end_ix = i + num_timesteps
 
-# input is event data
-# output is the data of targets that will be used for verifying predictions
-# output is formatted for split_sequences function
-def get_prediction_out_from_event(event):
-    out_seq = np.array(event[module_constants.event_class_attrib])
-    out_seq = out_seq.reshape((len(out_seq), 1))
-    out_seq[out_seq >= 100] -= 100
+            # check if we are beyond the sequence size
+            if end_ix > len(sequences_input):
+                break
 
-    # bad class input data
-    # if max(out_seq) > len(out_seq):
-    #     return None
+            # gather input and output parts of the pattern
+            seq_x, seq_y = sequences_input[i:end_ix], sequence_output[end_ix - 1]
+            X.append(seq_x)
+            y.append(seq_y)
 
-    out_seq = to_categorical(out_seq, num_classes)
-    return out_seq
+        # converts labels from integer vector to binary class matrix
+        y = keras.utils.to_categorical(y, num_classes=module_constants.num_class_types)
 
-
-# split a multivariate sequence into samples
-# sequence_in: array in the format [[a, b, c], [a, b, c], ...]
-# prediction_out: [[1., ..., 0.], [1., ..., 0.]]
-def split_sequences(sequence_in, prediction_out, n_steps):
-    X, y = list(), list()
-    for i in range(len(sequence_in)):
-        # find the end of this pattern
-        end_ix = i + n_steps
-        # check if we are beyond the dataset
-        if end_ix > len(sequence_in):
-            break
-        # gather input and output parts of the pattern
-        seq_x, seq_y = sequence_in[i:end_ix,], prediction_out[end_ix - 1, :]
-        X.append(seq_x)
-        y.append(seq_y)
-    return np.array(X), np.array(y)
+        return np.array(X), np.array(y)
