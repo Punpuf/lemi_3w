@@ -1,7 +1,6 @@
 import pandas as pd
 from constants import utils
 from raw_data_manager.models import EventMetadata, EventSource, EventClassType
-import os
 import re
 import pathlib
 import parallelbar
@@ -10,6 +9,7 @@ from absl import logging
 
 
 PARQUET_EXTENSION = ".parquet"
+NUMPY_ZIP_EXTENTION = ".npz"
 HASH_LENGTH = 7
 
 
@@ -43,6 +43,9 @@ class RawDataInspector:
                 f"Processing {total_tasks} events of class type {anomaly_folder.stem}."
             )
 
+            if total_tasks == 0:
+                continue
+
             events.append(
                 parallelbar.progress_starmap(
                     get_anomaly_metadata,
@@ -54,6 +57,8 @@ class RawDataInspector:
         if len(events) == 0:
             logging.warning("Found no event files.")
             return
+
+        logging.info(f"Found {len(events)}. The first one is {events[0]}")
 
         # Apply processing to all event metadata entries
         flatten_event = [item for sublist in events for item in sublist]
@@ -106,12 +111,80 @@ class RawDataInspector:
 
         return filtered_data
 
+    @staticmethod
+    def generate_table_by_anomaly_source(metadata_table: pd.DataFrame) -> pd.DataFrame:
+        """Given metadata table, returns metrics relating anomaly and source type"""
+        anomaly = []
+        real_count = []
+        simul_count = []
+        drawn_count = []
+        soma = []
+
+        for anomaly_type in EventClassType:
+            anomaly.append(anomaly_type.name)
+
+            real_count.append(
+                len(
+                    metadata_table[
+                        (metadata_table["class_type"] == anomaly_type.name)
+                        & (metadata_table["source"] == "REAL")
+                    ]
+                )
+            )
+            simul_count.append(
+                len(
+                    metadata_table[
+                        (metadata_table["class_type"] == anomaly_type.name)
+                        & (metadata_table["source"] == "SIMULATED")
+                    ]
+                )
+            )
+            drawn_count.append(
+                len(
+                    metadata_table[
+                        (metadata_table["class_type"] == anomaly_type.name)
+                        & (metadata_table["source"] == "HAND_DRAWN")
+                    ]
+                )
+            )
+            soma.append(
+                len(metadata_table[metadata_table["class_type"] == anomaly_type.name])
+            )
+
+        anomaly.append("Total")
+        real_count.append(sum(real_count))
+        simul_count.append(sum(simul_count))
+        drawn_count.append(sum(drawn_count))
+        soma.append(sum(soma))
+
+        data = {
+            "anomaly": anomaly,
+            "real_count": real_count,
+            "simul_count": simul_count,
+            "drawn_count": drawn_count,
+            "soma": soma,
+        }
+
+        # Create the DataFrame
+        df_source = pd.DataFrame(data)
+        df_source.set_index("anomaly", inplace=True)
+        return df_source
+
 
 def get_anomaly_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMetadata:
     """Returns EventMetadata for a single event given its path"""
 
-    if not anomaly_file.suffix == PARQUET_EXTENSION:
-        return
+    if anomaly_file.suffix == PARQUET_EXTENSION:
+        return get_parquet_metadata(anomaly_file, class_type)
+
+    if anomaly_file.suffix == NUMPY_ZIP_EXTENTION:
+        return get_numpy_zip_metadata(anomaly_file, class_type)
+
+    return
+
+
+def get_parquet_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMetadata:
+    """Returns EventMetadata for a single event given its path"""
 
     event_metadata = EventMetadata(
         class_type=EventClassType(class_type).name,
@@ -125,6 +198,38 @@ def get_anomaly_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMe
     event_metadata.file_size = anomaly_file.stat().st_size
     # TODO, check if - 1 is needed
     event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
+
+    if event_source.startswith("WELL"):
+        event_metadata.source = EventSource.REAL.name
+        event_metadata.well_id = int(event_source.removeprefix("WELL-"))
+        event_metadata.timestamp = pd.Timestamp(
+            anomaly_file.stem.removeprefix(f"{event_source}_")
+        )
+    elif event_source.startswith("SIMULATED"):
+        event_metadata.source = EventSource.SIMULATED.name
+    elif event_source.startswith("DRAWN"):
+        event_metadata.source = EventSource.HAND_DRAWN.name
+
+    return event_metadata
+
+
+def get_numpy_zip_metadata(
+    anomaly_file: pathlib.Path, class_type: int
+) -> EventMetadata:
+    """Returns EventMetadata for a single event given its path"""
+
+    event_metadata = EventMetadata(
+        class_type=EventClassType(class_type).name,
+        path=str(anomaly_file),
+    )
+    event_source = re.search("^[^_]+(?=_)", anomaly_file.stem)[0]
+
+    event_metadata.hash_id = utils.sha256sum(
+        f"{anomaly_file.parent.stem}/{anomaly_file.stem}"
+    )
+    event_metadata.file_size = anomaly_file.stat().st_size
+    # TODO, check if - 1 is needed
+    # event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
 
     if event_source.startswith("WELL"):
         event_metadata.source = EventSource.REAL.name

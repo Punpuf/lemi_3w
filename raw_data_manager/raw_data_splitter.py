@@ -28,8 +28,24 @@ class RawDataSplitter:
         sources: list[models.EventSource] = None,
         well_ids: list[int] = None,
     ):
+        filtered_metadata_table = self.__metadata_table
+
+        if class_types is not None and len(class_types) > 0:
+            filtered_metadata_table = filtered_metadata_table[
+                filtered_metadata_table["class_type"].isin(class_types)
+            ]
+        if sources is not None and len(sources) > 0:
+            filtered_metadata_table = filtered_metadata_table[
+                filtered_metadata_table["source"].isin(sources)
+            ]
+
+        if well_ids is not None and len(well_ids) > 0:
+            filtered_metadata_table = filtered_metadata_table[
+                filtered_metadata_table["well_id"].isin(well_ids)
+            ]
+
         train_path_list, test_path_list = self.get_split_path_division(
-            test_size, class_types, sources, well_ids
+            filtered_metadata_table, test_size
         )
         logging.debug(
             f"size of train data: {len(train_path_list)} --- size of test data: {len(test_path_list)}"
@@ -52,20 +68,18 @@ class RawDataSplitter:
 
         return train_dir_path, test_dir_path
 
+    @staticmethod
     def get_split_path_division(
-        self,
+        metadata_table,
         test_size: float,
-        class_types: list[models.EventClassType] = None,
-        sources: list[models.EventSource] = None,
-        well_ids: list[int] = None,
     ) -> Tuple[List[str], List[str]]:
         """Splits input metadata into train/eval in a stratefied way, also applies filters"""
         train, test, _, _ = train_test_split(
-            self.__metadata_table,
-            self.__metadata_table,
+            metadata_table,
+            metadata_table,
             test_size=test_size,
             random_state=1331,
-            stratify=self.__metadata_table[["source", "class_type"]],
+            stratify=metadata_table[["source", "class_type"]],
         )
 
         return train["path"].tolist(), test["path"].tolist()

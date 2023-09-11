@@ -5,6 +5,9 @@ from pathlib import Path
 from constants import module_constants
 from typing import Tuple
 from tensorflow import keras
+from parallelbar import progress_starmap
+from itertools import repeat
+from constants import utils
 
 
 class TransformationManager:
@@ -18,34 +21,64 @@ class TransformationManager:
 
     # each processing function will apply the 3 transformation functions
     # then save file to path
-    def __init__(self, metadata_table: pd.DataFrame, folder_name: str) -> None:
-        self.__metadata_table = metadata_table
-        self.folder_name = folder_name
+    def __init__(
+        self, metadata_table: pd.DataFrame, output_folder_base_name: str
+    ) -> None:
+        self.metadata_table = metadata_table
+        self.folder_name = output_folder_base_name
         logging.debug(
             f"""TransformationManager initialized with {metadata_table.shape[0]} items.
-            Folder name is {folder_name}."""
+            Folder name is {output_folder_base_name}."""
         )
         return
 
-    def apply_transformations_to_table(self, output_parent_dir: Path) -> None:
-        TRANSFORMATION_NAME_PREFIX = "transform-imp-std_tim-"
+    def apply_transformations_to_table(
+        self,
+        output_parent_dir: Path,
+        sample_interval_seconds: int,
+        num_timesteps_for_window: int,
+        avg_variable_mean: pd.Series,
+        avg_variable_std_dev: pd.Series,
+    ) -> None:
+        # create output directories
+        TRANSFORMATION_NAME_PREFIX = "transform-isdt-"
         output_dir: Path = (
-            output_parent_dir / TRANSFORMATION_NAME_PREFIX + self.folder_name
+            output_parent_dir / f"{TRANSFORMATION_NAME_PREFIX}{self.folder_name}"
         )
-        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for class_type in range(module_constants.num_class_types):
+            class_type_dir = output_dir / str(class_type)
+            class_type_dir.mkdir(parents=True, exist_ok=True)
 
         # get all paths
+        events_path = self.metadata_table["path"].tolist()
+
         # apply function to all of them
+        progress_starmap(
+            TransformationManager.apply_transformations_to_event,
+            zip(
+                events_path,
+                repeat(output_dir),
+                repeat(sample_interval_seconds),
+                repeat(num_timesteps_for_window),
+                repeat(avg_variable_mean),
+                repeat(avg_variable_std_dev),
+            ),
+            total=len(events_path),
+        )
 
     @staticmethod
     def apply_transformations_to_event(
-        event_path: Path,
-        sample_interval_seconds,
+        event_input_path: str,
+        event_grandparent_output_dir: Path,
+        sample_interval_seconds: int,
+        num_timesteps_for_window: int,
         avg_variable_mean: pd.Series,
         avg_variable_std_dev: pd.Series,
     ) -> None:
         # get item
-        event = pd.read_parquet(event_path)
+        event_input_path = Path(event_input_path)
+        event = utils.get_event(event_input_path)
 
         # lower sample rate
         downampled_event = TransformationManager.transform_event_with_downsample(
@@ -53,7 +86,7 @@ class TransformationManager:
         )
 
         # imput item
-        event_class_type = event_path.parent.stem
+        event_class_type = event_input_path.parent.stem
         imputed_event = TransformationManager.transform_event_with_imputation(
             downampled_event, event_class_type
         )
@@ -63,14 +96,64 @@ class TransformationManager:
             imputed_event, avg_variable_mean, avg_variable_std_dev
         )
 
-        # add sin and cos transformation of the time stamp regarding time of day and year
+        # sin and cos transformation of the time stamp regarding time of day and year
 
         # get time windows
+        (
+            windowed_event_X,
+            windowed_event_y,
+        ) = TransformationManager.transform_event_with_timestep_windows(
+            standardized_event, num_timesteps_for_window
+        )
 
         # store results
-        new_path = event_path.replace(input_folder, output_folder).replace(
-            ".feather", ".npy"
+        file_name = event_input_path.stem
+        output_path = (
+            event_grandparent_output_dir
+            / event_input_path.parent.stem
+            / f"{file_name}.npz"
         )
+
+        TransformationManager.store_pair_array(
+            windowed_event_X, windowed_event_y, output_path
+        )
+
+    @staticmethod
+    def store_pair_array(
+        array_1: np.array, array_2: np.array, storage_file_path: Path
+    ) -> None:
+        """Joins and stores a pair of same size array to storage
+
+        Parameters
+        ----------
+        array_1: np.array
+            First array, represents X.
+        array_2: np.array
+            Second array, represents y.
+        storage_file_path: Path
+            Path where the array pair was stored.
+
+        """
+
+        np.savez(storage_file_path, X=array_1, y=array_2)
+
+    @staticmethod
+    def retrieve_pair_array(storage_file_path: Path) -> Tuple[np.array, np.array]:
+        """Retrieves a previously stored array pair
+
+        Parameters
+        ----------
+        storage_file_path: Path
+            Path where the array pair was stored.
+
+        Returns
+        -------
+        Tuple[np.array, np.array]
+            Pair of arrays stored at file path. Represents [X, y].
+        """
+
+        arrays = np.load(storage_file_path)
+        return arrays["X"], arrays["y"]
 
     @staticmethod
     def transform_event_with_imputation(
@@ -210,13 +293,16 @@ class TransformationManager:
             ]
         )
         output_sequece = np.array(event_data[module_constants.event_class_attrib])
+        if output_sequece.dtype == object:
+            logging.debug(f"sequence_output is {output_sequece[0:10]}")
+            logging.debug(f"event data -> {event_data}")
 
-        return TransformationManager.split_sequences(
+        return TransformationManager.split_sequences_into_windows(
             input_sequences, output_sequece, num_timesteps
         )
 
     @staticmethod
-    def split_sequences(
+    def split_sequences_into_windows(
         sequences_input: np.array, sequence_output: np.array, num_timesteps: int
     ) -> Tuple[np.array, np.array]:
         """Splits a multivariate sequence into windowed samples
@@ -253,6 +339,8 @@ class TransformationManager:
             y.append(seq_y)
 
         # converts labels from integer vector to binary class matrix
+        y = np.array(y).astype(int)
+        y[y >= 100] = y[y >= 100] - 100  # 100 is the constant for transient annomalies
         y = keras.utils.to_categorical(y, num_classes=module_constants.num_class_types)
 
         return np.array(X), np.array(y)

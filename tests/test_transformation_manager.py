@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
 from unittest.mock import patch
+import pathlib
 import pytest
 from data_preparation.transformation_manager import TransformationManager
+import tempfile
+import shutil
 
 
 def test_transform_event_with_imputation():
@@ -272,7 +275,7 @@ def test_transform_event_with_timestep_windows():
             "T-JUS-CKP": [20, 40, 60, 80, 100, 120],
             "P-JUS-CKGL": [100, 200, 300, 400, 500, 600],
             "QGL": [1, 2, 3, 4, 5, 6],
-            "class": [0, 0, 0, 0, 4, 4],
+            "class": [0, 0, 0, 0, 104, 4],
         }
     )
     (
@@ -337,3 +340,41 @@ def test_transform_event_with_timestep_windows():
             ]
         )
     ).all()
+
+
+def test_store_and_retrieve_pair_array():
+    array1 = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [0.0, 0.0],
+        ]
+    )
+    array2 = np.array(
+        [
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ]
+    )
+
+    # define file location
+    temp_dir = pathlib.Path(tempfile.mkdtemp())
+    temp_file = temp_dir / "temp_file.npz"
+
+    # store and retrieve file
+    TransformationManager.store_pair_array(array1, array2, temp_file)
+    out_array1, out_array2 = TransformationManager.retrieve_pair_array(temp_file)
+
+    # clean up
+    shutil.rmtree(str(temp_dir))
+
+    # assert equality
+    assert (array1 == out_array1).all()
+    assert (array2 == out_array2).all()

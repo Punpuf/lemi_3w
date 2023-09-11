@@ -61,6 +61,30 @@ class MetricAcquisition:
 
         return pd.concat([pmm, psm], axis=1)
 
+    @staticmethod
+    def get_mean_and_std_metric_from_cache(cache_file_name: str):
+        processed_means = utils.save_retrieve_object(
+            f"{cache_file_name}-processed_means",
+            None,
+            [None],
+            True,
+        )
+
+        processed_stds = utils.save_retrieve_object(
+            f"{cache_file_name}-processed_stds",
+            None,
+            [None],
+            True,
+        )
+
+        pmm = processed_means.to_frame()
+        pmm.columns = ["mean_of_means"]
+
+        psm = processed_stds.to_frame()
+        psm.columns = ["mean_of_stds"]
+
+        return pd.concat([pmm, psm], axis=1)
+
     def process_event_mean(self, path: str) -> pd.Series:
         """Returns the mean of each variable, for a single event."""
         event = pd.read_parquet(path)
