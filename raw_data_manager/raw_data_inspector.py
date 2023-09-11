@@ -58,7 +58,7 @@ class RawDataInspector:
             logging.warning("Found no event files.")
             return
 
-        logging.info(f"Found {len(events)}. The first one is {events[0]}")
+        logging.info(f"Found {len(events)}.")
 
         # Apply processing to all event metadata entries
         flatten_event = [item for sublist in events for item in sublist]

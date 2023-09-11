@@ -13,6 +13,7 @@ from constants import utils
 class TransformationManager:
     """Manages transformation of events present in a metadata table"""
 
+    TRANSFORMATION_NAME_PREFIX = "transform-isdt-"
     # class that receives metadata table
 
     # can call a prepration function
@@ -41,9 +42,9 @@ class TransformationManager:
         avg_variable_std_dev: pd.Series,
     ) -> None:
         # create output directories
-        TRANSFORMATION_NAME_PREFIX = "transform-isdt-"
+
         output_dir: Path = (
-            output_parent_dir / f"{TRANSFORMATION_NAME_PREFIX}{self.folder_name}"
+            output_parent_dir / f"{self.TRANSFORMATION_NAME_PREFIX}{self.folder_name}"
         )
 
         for class_type in range(module_constants.num_class_types):
