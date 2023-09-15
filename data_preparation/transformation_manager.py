@@ -100,12 +100,18 @@ class TransformationManager:
         # sin and cos transformation of the time stamp regarding time of day and year
 
         # get time windows
-        (
-            windowed_event_X,
-            windowed_event_y,
-        ) = TransformationManager.transform_event_with_timestep_windows(
-            standardized_event, num_timesteps_for_window
-        )
+
+        try:
+            (
+                windowed_event_X,
+                windowed_event_y,
+            ) = TransformationManager.transform_event_with_timestep_windows(
+                standardized_event, num_timesteps_for_window
+            )
+        except Exception:
+            raise ValueError(
+                f"Exception while to split_sequences_into_windows. Path is: {event_input_path}"
+            )
 
         # store results
         file_name = event_input_path.stem
@@ -257,9 +263,22 @@ class TransformationManager:
             Data of the event transformed by downsampling its values.
         """
 
-        return event_data.resample(
-            f"{sample_interval_seconds}s", origin="start", closed="left"
-        ).mean()
+        resampled_numeric_data = (
+            event_data[module_constants.event_num_attribs]
+            .resample(f"{sample_interval_seconds}s", origin="start", closed="left")
+            .mean()
+        )
+
+        resampled_class_data = (
+            event_data[module_constants.event_class_attrib]
+            .resample(f"{sample_interval_seconds}s", origin="start", closed="left")
+            .min()
+        )
+
+        return pd.concat(
+            [resampled_numeric_data, resampled_class_data],
+            axis=1,
+        )
 
     @staticmethod
     def transform_event_with_timestep_windows(
@@ -294,9 +313,9 @@ class TransformationManager:
             ]
         )
         output_sequece = np.array(event_data[module_constants.event_class_attrib])
-        if output_sequece.dtype == object:
-            logging.debug(f"sequence_output is {output_sequece[0:10]}")
-            logging.debug(f"event data -> {event_data}")
+        # if output_sequece.dtype == object:
+        # logging.debug(f"sequence_output is {output_sequece[0:10]}")
+        # logging.debug(f"event data -> {event_data}")
 
         return TransformationManager.split_sequences_into_windows(
             input_sequences, output_sequece, num_timesteps
@@ -342,6 +361,14 @@ class TransformationManager:
         # converts labels from integer vector to binary class matrix
         y = np.array(y).astype(int)
         y[y >= 100] = y[y >= 100] - 100  # 100 is the constant for transient annomalies
-        y = keras.utils.to_categorical(y, num_classes=module_constants.num_class_types)
+
+        try:
+            y = keras.utils.to_categorical(
+                y, num_classes=module_constants.num_class_types
+            )
+        except Exception:
+            raise ValueError(
+                f"Exception while to categorical. Present values: {np.unique(y)}"
+            )
 
         return np.array(X), np.array(y)
