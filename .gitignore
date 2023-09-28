@@ -29,4 +29,4 @@ template/
 poetry
 pyvenv.cfg
 .cache/
-.test.ipynb
+test_notebook.ipynb

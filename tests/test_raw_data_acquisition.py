@@ -9,11 +9,11 @@ from raw_data_manager.raw_data_acquisition import (
     extract_directory_dataset_version,
     get_latest_local_converted_data_version,
     create_output_directories,
-    convert_csv_to_parquet,
+    convert_csv_dataset_to_parquet,
     delete_3w_repo,
 )
 from raw_data_manager import raw_data_acquisition
-from constants import config
+from constants import storage_config
 
 import pytest
 import pandas as pd
@@ -49,11 +49,11 @@ class TestDataAcquisition:
         # Create a temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
         # Store original constants.DIR_DOWNLOADED_REPO value and update it to the temp_dir
-        self.original_dir_downloaded_repo = config.DIR_DOWNLOADED_REPO
-        config.DIR_DOWNLOADED_REPO = self.temp_dir
+        self.original_dir_downloaded_repo = storage_config.DIR_DOWNLOADED_REPO
+        storage_config.DIR_DOWNLOADED_REPO = self.temp_dir
         yield
         # Clean up after each test
-        config.DIR_DOWNLOADED_REPO = self.original_dir_downloaded_repo
+        storage_config.DIR_DOWNLOADED_REPO = self.original_dir_downloaded_repo
         shutil.rmtree(self.temp_dir)
 
     def test_get_dataset_version_from_config_file_with_data(self):
@@ -124,7 +124,7 @@ class TestDataAcquisition:
 
         # Convert the CSV file to parquet
         create_output_directories(raw_dir, converted_dir)
-        convert_csv_to_parquet(raw_dir, converted_dir)
+        convert_csv_dataset_to_parquet(raw_dir, converted_dir)
 
         # Check if the parquet file exists
         sample_file_converted = converted_dir / "8" / "sample.parquet"
@@ -198,10 +198,10 @@ class TestExtractDirectoryDatasetVersion:
     @pytest.mark.parametrize(
         "directory, expected_result",
         [
-            (f"{config.DIR_CONVERTED_PREFIX}2.1.3", "2.1.3"),
-            (f"{config.DIR_CONVERTED_PREFIX}3.10.5", "3.10.5"),
-            (f"{config.DIR_CONVERTED_PREFIX}1.11", "1.11"),
-            (f"{config.DIR_CONVERTED_PREFIX}2", "2"),
+            (f"{storage_config.DIR_CONVERTED_PREFIX}2.1.3", "2.1.3"),
+            (f"{storage_config.DIR_CONVERTED_PREFIX}3.10.5", "3.10.5"),
+            (f"{storage_config.DIR_CONVERTED_PREFIX}1.11", "1.11"),
+            (f"{storage_config.DIR_CONVERTED_PREFIX}2", "2"),
             ("olha_a_pamonha", None),
             ("pamonha_caseira_v2.0.4", None),
             ("pamonha_fresquinha_v1.0", None),

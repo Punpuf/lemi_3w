@@ -1,12 +1,13 @@
+from itertools import repeat
+from absl import logging
 import pandas as pd
-from constants import utils
-from raw_data_manager.models import EventMetadata, EventSource, EventClassType
 import re
 import pathlib
 import parallelbar
-from itertools import repeat
-from absl import logging
+import hashlib
 
+from raw_data_manager.models import EventMetadata, EventSource, EventClassType
+import raw_data_acquisition
 
 PARQUET_EXTENSION = ".parquet"
 NUMPY_ZIP_EXTENTION = ".npz"
@@ -14,7 +15,20 @@ HASH_LENGTH = 7
 
 
 class RawDataInspector:
-    """Manages metadata aquisition and its internal organization. Includes caching system."""
+    """
+    Manages metadata acquisition and its internal organization, including caching system.
+
+    This class provides methods to process and retrieve event metadata from the dataset.
+
+    Attributes
+    ----------
+    __dataset_dir : pathlib.Path
+        The dataset directory.
+    __cache_file_path : pathlib.Path
+        The path to the cache file.
+    __events_metadata : pd.DataFrame
+        The cached events metadata.
+    """
 
     def __init__(
         self,
@@ -22,13 +36,35 @@ class RawDataInspector:
         cache_file_path: pathlib.Path,
         use_cached: bool = True,
     ):
+        """
+        Initializes a RawDataInspector instance.
+
+        Parameters
+        ----------
+        dataset_dir : pathlib.Path
+            The dataset directory.
+        cache_file_path : pathlib.Path
+            The path to the cache file.
+        use_cached : bool, optional
+            Flag to use cached data if available, by default True.
+        """
         self.__dataset_dir = dataset_dir
         self.__cache_file_path = cache_file_path
         self.__events_metadata = self.__load_data(use_cached)
         return
 
     def __process_data(self):
-        """Maps all metadata in the given directory, caching result as a DataFrame"""
+        """
+        Processes all metadata in the dataset directory, caching the result as a DataFrame.
+
+        This method iterates through the dataset directory, processes each event file,
+        and compiles the metadata into a DataFrame. The resulting DataFrame is then saved
+        to the cache file.
+
+        Notes
+        -----
+        If no event files are found in the dataset directory, a warning is logged.
+        """
 
         events = []
 
@@ -81,7 +117,23 @@ class RawDataInspector:
         result_data.to_parquet(self.__cache_file_path)
 
     def __load_data(self, use_cached):
-        """Returns data, loading new data if not available or if resquested"""
+        """
+        Loads event metadata from cache or processes it if not available.
+
+        This method checks if cached data is available and loads it. If not, it calls
+        the __process_data method to process the data and save it to the cache file.
+        The processed metadata is then returned.
+
+        Parameters
+        ----------
+        use_cached : bool
+            Flag to use cached data if available.
+
+        Returns
+        -------
+        pd.DataFrame
+            The event metadata DataFrame.
+        """
 
         # Process data and save to cache if needed
         if (not use_cached) or (not self.__cache_file_path.is_file()):
@@ -96,7 +148,23 @@ class RawDataInspector:
         sources: list[EventSource] = None,
         well_ids: list[int] = None,
     ) -> pd.DataFrame:
-        """Returns DataFrame with metadata, optionally filtered by class type or source"""
+        """
+        Returns a DataFrame with metadata, optionally filtered by class type or source.
+
+        Parameters
+        ----------
+        class_types : list of EventClassType, optional
+            The list of event class types to filter, by default None.
+        sources : list of EventSource, optional
+            The list of event sources to filter, by default None.
+        well_ids : list of int, optional
+            The list of well IDs to filter, by default None.
+
+        Returns
+        -------
+        pd.DataFrame
+            The filtered metadata DataFrame.
+        """
 
         filtered_data = self.__events_metadata
 
@@ -113,7 +181,19 @@ class RawDataInspector:
 
     @staticmethod
     def generate_table_by_anomaly_source(metadata_table: pd.DataFrame) -> pd.DataFrame:
-        """Given metadata table, returns metrics relating anomaly and source type"""
+        """
+        Given a metadata table, returns metrics relating to anomaly and source type.
+
+        Parameters
+        ----------
+        metadata_table : pd.DataFrame
+            The metadata table.
+
+        Returns
+        -------
+        pd.DataFrame
+            The generated table relating to anomaly and source type.
+        """
         anomaly = []
         real_count = []
         simul_count = []
@@ -172,7 +252,21 @@ class RawDataInspector:
 
 
 def get_anomaly_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMetadata:
-    """Returns EventMetadata for a single event given its path"""
+    """
+    Returns EventMetadata for a single event given its path.
+
+    Parameters
+    ----------
+    anomaly_file : pathlib.Path
+        The path to the anomaly event file.
+    class_type : int
+        The class type of the event.
+
+    Returns
+    -------
+    EventMetadata
+        The event metadata.
+    """
 
     if anomaly_file.suffix == PARQUET_EXTENSION:
         return get_parquet_metadata(anomaly_file, class_type)
@@ -184,7 +278,21 @@ def get_anomaly_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMe
 
 
 def get_parquet_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMetadata:
-    """Returns EventMetadata for a single event given its path"""
+    """
+    Returns EventMetadata for a single event in Parquet format given its path.
+
+    Parameters
+    ----------
+    anomaly_file : pathlib.Path
+        The path to the Parquet anomaly event file.
+    class_type : int
+        The class type of the event.
+
+    Returns
+    -------
+    EventMetadata
+        The event metadata.
+    """
 
     event_metadata = EventMetadata(
         class_type=EventClassType(class_type).name,
@@ -192,12 +300,13 @@ def get_parquet_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMe
     )
     event_source = re.search("^[^_]+(?=_)", anomaly_file.stem)[0]
 
-    event_metadata.hash_id = utils.sha256sum(
+    event_metadata.hash_id = sha256sum(
         f"{anomaly_file.parent.stem}/{anomaly_file.stem}"
     )
     event_metadata.file_size = anomaly_file.stat().st_size
-    # TODO, check if - 1 is needed
-    event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
+    event_metadata.num_timesteps = raw_data_acquisition.get_event(
+        str(anomaly_file)
+    ).shape[0]
 
     if event_source.startswith("WELL"):
         event_metadata.source = EventSource.REAL.name
@@ -216,7 +325,21 @@ def get_parquet_metadata(anomaly_file: pathlib.Path, class_type: int) -> EventMe
 def get_numpy_zip_metadata(
     anomaly_file: pathlib.Path, class_type: int
 ) -> EventMetadata:
-    """Returns EventMetadata for a single event given its path"""
+    """
+    Returns EventMetadata for a single event in NumPy ZIP format given its path.
+
+    Parameters
+    ----------
+    anomaly_file : pathlib.Path
+        The path to the NumPy ZIP anomaly event file.
+    class_type : int
+        The class type of the event.
+
+    Returns
+    -------
+    EventMetadata
+        The event metadata.
+    """
 
     event_metadata = EventMetadata(
         class_type=EventClassType(class_type).name,
@@ -224,12 +347,10 @@ def get_numpy_zip_metadata(
     )
     event_source = re.search("^[^_]+(?=_)", anomaly_file.stem)[0]
 
-    event_metadata.hash_id = utils.sha256sum(
+    event_metadata.hash_id = sha256sum(
         f"{anomaly_file.parent.stem}/{anomaly_file.stem}"
     )
     event_metadata.file_size = anomaly_file.stat().st_size
-    # TODO, check if - 1 is needed
-    # event_metadata.num_timesteps = utils.get_event(str(anomaly_file)).shape[0]
 
     if event_source.startswith("WELL"):
         event_metadata.source = EventSource.REAL.name
@@ -243,3 +364,22 @@ def get_numpy_zip_metadata(
         event_metadata.source = EventSource.HAND_DRAWN.name
 
     return event_metadata
+
+
+def sha256sum(data_string: str) -> str:
+    """
+    Calculates the SHA-256 hash for a given string.
+
+    Parameters
+    ----------
+    data_string : str
+        The input string.
+
+    Returns
+    -------
+    str
+        The SHA-256 hash.
+    """
+    h = hashlib.sha256()
+    h.update(data_string.encode("utf-8"))
+    return h.hexdigest()

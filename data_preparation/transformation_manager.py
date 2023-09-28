@@ -8,6 +8,7 @@ from tensorflow import keras
 from parallelbar import progress_starmap
 from itertools import repeat
 from constants import utils
+from raw_data_manager.models import EventClassType, EventParameters
 
 
 class TransformationManager:
@@ -79,7 +80,7 @@ class TransformationManager:
             output_parent_dir / f"{self.TRANSFORMATION_NAME_PREFIX}{self.folder_name}"
         )
 
-        for class_type in range(module_constants.num_class_types):
+        for class_type in range(len(EventClassType)):
             class_type_dir = output_dir / str(class_type)
             class_type_dir.mkdir(parents=True, exist_ok=True)
 
@@ -232,10 +233,10 @@ class TransformationManager:
 
         # check if class is in permanent (0-8) or transient regime (101-108)
         is_class_attrib_valid = (
-            event_data[module_constants.event_class_attrib]
+            event_data[EventParameters.event_class_attrib]
             .fillna(value=0)
             .between(0, 8, inclusive="both")
-            + event_data[module_constants.event_class_attrib]
+            + event_data[EventParameters.event_class_attrib]
             .fillna(value=0)
             .between(101, 108, inclusive="both")
         ).all()
@@ -279,15 +280,15 @@ class TransformationManager:
             Data of the event transformed by imputing its null values.
         """
 
-        event_data[module_constants.event_num_attribs] = (
-            event_data[module_constants.event_num_attribs]
+        event_data[EventParameters.event_num_attribs] = (
+            event_data[EventParameters.event_num_attribs]
             .interpolate()
             .ffill()
             .bfill()
             .fillna(0)
         )
-        event_data[module_constants.event_class_attrib] = (
-            event_data[module_constants.event_class_attrib]
+        event_data[EventParameters.event_class_attrib] = (
+            event_data[EventParameters.event_class_attrib]
             .ffill()
             .bfill()
             .fillna(event_class_type)
@@ -323,8 +324,8 @@ class TransformationManager:
         def standardize(x):
             return (x - avg_variable_mean[x.name]) / avg_variable_std_dev[x.name]
 
-        event_data[module_constants.event_num_attribs] = event_data[
-            module_constants.event_num_attribs
+        event_data[EventParameters.event_num_attribs] = event_data[
+            EventParameters.event_num_attribs
         ].apply(lambda x: standardize(x), axis=0)
         return event_data
 
@@ -351,13 +352,13 @@ class TransformationManager:
         """
 
         resampled_numeric_data = (
-            event_data[module_constants.event_num_attribs]
+            event_data[EventParameters.event_num_attribs]
             .resample(f"{sample_interval_seconds}s", origin="start", closed="left")
             .mean()
         )
 
         resampled_class_data = (
-            event_data[module_constants.event_class_attrib]
+            event_data[EventParameters.event_class_attrib]
             .resample(f"{sample_interval_seconds}s", origin="start", closed="left")
             .min()
         )
@@ -389,9 +390,7 @@ class TransformationManager:
         """
 
         num_rows = event_data.shape[0]
-        numeric_column_name_list = event_data[
-            module_constants.event_num_attribs
-        ].columns
+        numeric_column_name_list = event_data[EventParameters.event_num_attribs].columns
 
         input_sequences = np.hstack(
             [
@@ -399,7 +398,7 @@ class TransformationManager:
                 for c in numeric_column_name_list
             ]
         )
-        output_sequece = np.array(event_data[module_constants.event_class_attrib])
+        output_sequece = np.array(event_data[EventParameters.event_class_attrib])
 
         return TransformationManager.split_sequences_into_windows(
             input_sequences, output_sequece, num_timesteps

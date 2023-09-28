@@ -3,25 +3,24 @@ import sys
 sys.path.append("..")  # Allows imports from sibling directories
 
 from absl import logging
-from constants import config, utils
+from git.repo.base import Repo
+from typing import Tuple
 import pandas as pd
 import pathlib
 import tempfile
 import shutil
-from git.repo.base import Repo
 import parallelbar
 import configparser
-import urllib.request
 import re
 import os
-from typing import Tuple
 
+from constants import storage_config, utils
 
-URL_3W_REPO = config.URL_3W_REPO
-URL_3W_CONFIG_FILE = config.URL_3W_DATASET_CONFIG_FILE
-DIR_DATA = config.DIR_PROJECT_DATA
-DIR_DOWNLOADED_REPO = config.DIR_DOWNLOADED_REPO
-DIR_RAW_DATASET = config.DIR_RAW_DATASET
+URL_3W_REPO = storage_config.URL_3W_REPO
+URL_3W_CONFIG_FILE = storage_config.URL_3W_DATASET_CONFIG_FILE
+DIR_DATA = storage_config.DIR_PROJECT_DATA
+DIR_DOWNLOADED_REPO = storage_config.DIR_DOWNLOADED_REPO
+DIR_RAW_DATASET = storage_config.DIR_RAW_DATASET
 
 CSV_EXTENSION = ".csv"
 PARQUET_EXTENSION = ".parquet"
@@ -29,13 +28,31 @@ PARQUET_EXTENSION = ".parquet"
 
 def acquire_dataset_if_needed(
     url_3w_repo: str = URL_3W_REPO,
-    url_3w_dataset_config_file=URL_3W_CONFIG_FILE,
+    url_3w_dataset_config_file: str = URL_3W_CONFIG_FILE,
     dir_3w_repo: str = DIR_DOWNLOADED_REPO,
     dir_data: str = DIR_DATA,
     dir_raw_dataset: str = DIR_RAW_DATASET,
     require_latest_version: bool = True,
 ) -> None:
-    """Downloads dataset, and converts its format if the latest isn't already available"""
+    """
+    Downloads the dataset and converts its format if the latest version isn't already available.
+
+    Parameters
+    ----------
+    url_3w_repo : str, optional
+        The URL of the 3W repository, by default URL_3W_REPO.
+    url_3w_dataset_config_file : str, optional
+        The URL of the 3W dataset config file, by default URL_3W_CONFIG_FILE.
+    dir_3w_repo : str, optional
+        The directory where the 3W repository will be downloaded, by default DIR_DOWNLOADED_REPO.
+    dir_data : str, optional
+        The parent directory where the dataset will be stored, by default DIR_DATA.
+    dir_raw_dataset : str, optional
+        The directory for the raw dataset, by default DIR_RAW_DATASET.
+    require_latest_version : bool, optional
+        Flag to specify if the latest version is required, by default True.
+    """
+
     pathlib.Path(dir_data).mkdir(parents=True, exist_ok=True)
     dir_latest_local, version_latest_local = get_latest_local_converted_data_version(
         dir_data
@@ -67,12 +84,12 @@ def acquire_dataset_if_needed(
     )
 
     dir_converted_dataset = DIR_DATA / (
-        config.DIR_CONVERTED_PREFIX + latest_dataset_version_online
+        storage_config.DIR_CONVERTED_PREFIX + latest_dataset_version_online
     )
 
     download_3w_repo(url_3w_repo, dir_3w_repo)
     create_output_directories(dir_raw_dataset, dir_converted_dataset)
-    convert_csv_to_parquet(dir_raw_dataset, dir_converted_dataset)
+    convert_csv_dataset_to_parquet(dir_raw_dataset, dir_converted_dataset)
     delete_3w_repo(dir_3w_repo)
 
 
@@ -80,9 +97,28 @@ def has_valid_converted_dataset(
     dir_latest_local,
     version_latest_local,
     version_latest_online,
-    is_latest_version_required,
-):
-    """Checks if version is the latest, and if data is present"""
+    is_latest_version_required: bool,
+) -> bool:
+    """
+    Checks if the provided version is the latest and if converted data is present.
+
+    Parameters
+    ----------
+    dir_latest_local
+        The latest local directory.
+    version_latest_local
+        The version of the latest local dataset.
+    version_latest_online
+        The latest online version of the dataset.
+    is_latest_version_required
+        Flag indicating if the latest version is required.
+
+    Returns
+    -------
+    bool
+        True if the version is valid and data is present, False otherwise.
+    """
+
     if dir_latest_local is not None and version_latest_online is not None:
         if (
             is_latest_version_required == False
@@ -94,7 +130,19 @@ def has_valid_converted_dataset(
 
 
 def get_dataset_version_from_config_file(dataset_config_file_path: str) -> str:
-    """Returns the dataset version present in a local .ini file"""
+    """
+    Returns the dataset version present in a local .ini file.
+
+    Parameters
+    ----------
+    dataset_config_file_path : str
+        The path to the dataset configuration file.
+
+    Returns
+    -------
+    str
+        The dataset version.
+    """
     parser = configparser.ConfigParser()
     parser.read(dataset_config_file_path)
     try:
@@ -105,7 +153,19 @@ def get_dataset_version_from_config_file(dataset_config_file_path: str) -> str:
 
 
 def fetch_latest_online_dataset_version(url_dataset_config_file: str) -> str:
-    """Fetches the latest dataset version present in the online repository"""
+    """
+    Fetches the latest dataset version present in the online repository.
+
+    Parameters
+    ----------
+    url_dataset_config_file : str
+        The URL of the dataset configuration file.
+
+    Returns
+    -------
+    str
+        The latest dataset version.
+    """
     dataset_config_file_path = pathlib.Path.cwd() / tempfile.mkdtemp() / "config.ini"
     logging.info(f"Going to fetch config file from ${url_dataset_config_file}")
 
@@ -119,13 +179,26 @@ def fetch_latest_online_dataset_version(url_dataset_config_file: str) -> str:
 
     pathlib.Path(dataset_config_file_path).unlink()
 
-    return utils.version_string_to_number(latest_dataset_version)
+    return version_string_to_number(latest_dataset_version)
 
 
 def extract_directory_dataset_version(directory_name: str) -> str:
-    """Extracts dataset version from directory name"""
+    """
+    Extracts the dataset version from a directory name.
+
+    Parameters
+    ----------
+    directory_name : str
+        The name of the directory.
+
+    Returns
+    -------
+    str
+        The extracted dataset version.
+    """
+
     # matches any version with digits and dots
-    regex_pattern = rf"{config.DIR_CONVERTED_PREFIX}(\d+(\.\d+)*)"
+    regex_pattern = rf"{storage_config.DIR_CONVERTED_PREFIX}(\d+(\.\d+)*)"
 
     matches = re.search(regex_pattern, directory_name)
     if matches:
@@ -135,6 +208,20 @@ def extract_directory_dataset_version(directory_name: str) -> str:
 
 
 def get_latest_local_converted_data_version(dir_data: str) -> Tuple[pathlib.Path, str]:
+    """
+    Gets the latest local converted data version.
+
+    Parameters
+    ----------
+    dir_data : str
+        The directory containing the data.
+
+    Returns
+    -------
+    Tuple[pathlib.Path, str]
+        A tuple containing the directory and the version of the latest local converted data.
+    """
+
     base_directory = pathlib.Path(dir_data)
     directories = [dir for dir in base_directory.iterdir() if dir.is_dir()]
 
@@ -159,7 +246,19 @@ def get_latest_local_converted_data_version(dir_data: str) -> Tuple[pathlib.Path
 
 
 def has_converted_data(path_converted_data: str) -> bool:
-    """Checks for .parquet file existence in the converted raw data folder"""
+    """
+    Checks if converted data exists in the specified path.
+
+    Parameters
+    ----------
+    path_converted_data : str
+        The path to the converted data.
+
+    Returns
+    -------
+    bool
+        True if converted data is present, False otherwise.
+    """
     data_converted_dir = pathlib.Path(path_converted_data)
     if not data_converted_dir.is_dir():
         return False
@@ -174,7 +273,16 @@ def has_converted_data(path_converted_data: str) -> bool:
 
 
 def download_3w_repo(download_url: str, path_downloaded_repo: str) -> None:
-    """Downloads the 3W repo from GitHub"""
+    """
+    Downloads the 3W repository from GitHub.
+
+    Parameters
+    ----------
+    download_url : str
+        The URL of the 3W repository on GitHub.
+    path_downloaded_repo : str
+        The local path where the repository will be downloaded.
+    """
     logging.debug("Downloading 3W repo")
     Repo.clone_from(
         url=download_url,
@@ -183,8 +291,22 @@ def download_3w_repo(download_url: str, path_downloaded_repo: str) -> None:
     )
 
 
-def create_output_directories(path_raw_dataset: str, path_converted_dataset: str):
-    """Create output directories for converted data"""
+def create_output_directories(
+    path_raw_dataset: str, path_converted_dataset: str
+) -> None:
+    """
+    Creates output directories for converted data.
+
+    This function iterates through the raw dataset directory and creates output directories
+    for each numeric subdirectory within the converted dataset directory.
+
+    Parameters
+    ----------
+    path_raw_dataset : str
+        The path to the directory containing the raw dataset.
+    path_converted_dataset : str
+        The path to the directory where the converted dataset will be stored.
+    """
     data_raw_dir = pathlib.Path(path_raw_dataset)
     data_converted_dir = pathlib.Path(path_converted_dataset)
 
@@ -194,17 +316,38 @@ def create_output_directories(path_raw_dataset: str, path_converted_dataset: str
             item_output_dir.mkdir(parents=True, exist_ok=True)
 
 
-def convert_file(anomaly_file, item_output_dir):
-    if anomaly_file.suffix == CSV_EXTENSION:
-        file_name = anomaly_file.stem
-        file_path = item_output_dir / f"{file_name}{PARQUET_EXTENSION}"
-        pd.read_csv(anomaly_file).to_parquet(file_path)
+def convert_csv_file_to_parquet(event_file_path, output_dir) -> None:
+    """
+    Converts a CSV anomaly file to Parquet format.
+
+    Parameters
+    ----------
+    event_file_path
+        The path of the CSV event file to be converted.
+    output_dir
+        The output directory for the converted Parquet file.
+    """
+    if event_file_path.suffix == CSV_EXTENSION:
+        file_name = event_file_path.stem
+        file_path = output_dir / f"{file_name}{PARQUET_EXTENSION}"
+        pd.read_csv(event_file_path).to_parquet(file_path)
 
 
-def convert_csv_to_parquet(path_raw_dataset: str, path_converted_dataset: str) -> None:
-    """Converts downloaded 'dataset' from .csv to .parquet"""
+def convert_csv_dataset_to_parquet(
+    path_raw_dataset: str, path_converted_dataset: str
+) -> None:
+    """
+    Converts the downloaded dataset from .csv to .parquet format.
+
+    Parameters
+    ----------
+    path_raw_dataset : str
+        The path to the directory containing the raw dataset in CSV format.
+    path_converted_dataset : str
+        The path to the directory where the converted dataset in Parquet format will be stored.
+    """
+
     logging.debug("Converting 3W data from .csv to .parquet")
-
     data_raw_dir = pathlib.Path(path_raw_dataset)
     data_converted_dir = pathlib.Path(path_converted_dataset)
 
@@ -219,12 +362,84 @@ def convert_csv_to_parquet(path_raw_dataset: str, path_converted_dataset: str) -
 
     total_tasks = len(tasks_input)
     parallelbar.progress_starmap(
-        convert_file, zip(tasks_input, tasks_output), total=total_tasks
+        convert_csv_file_to_parquet, zip(tasks_input, tasks_output), total=total_tasks
     )
     logging.info("Conversion to parquet has been completed")
 
 
-def delete_3w_repo(path_downloaded_repo: str):
-    """Deletes the original downloaded repo files, as no longer needed"""
+def delete_3w_repo(path_downloaded_repo: str) -> None:
+    """
+    Deletes the original downloaded repo files as they are no longer needed.
+
+    Parameters
+    ----------
+    path_downloaded_repo : str
+        The path to the downloaded repository to be deleted.
+    """
     logging.debug("Deleting unconverted .csv dataset data")
     shutil.rmtree(path_downloaded_repo)
+
+
+def get_directory_size_bytes(directory) -> int:
+    """
+    Calculates the size of a directory in bytes.
+
+    Parameters
+    ----------
+    directory
+        The directory for which the size will be calculated.
+
+    Returns
+    -------
+    int
+        The size of the directory in bytes.
+    """
+    total_size = 0
+    with os.scandir(directory) as it:
+        for entry in it:
+            if entry.is_file():
+                total_size += entry.stat().st_size
+            elif entry.is_dir():
+                total_size += get_directory_size_bytes(entry.path)
+    return total_size
+
+
+def get_event(path) -> pd.DataFrame:
+    """
+    Reads and processes an event from a Parquet file.
+
+    Parameters
+    ----------
+    path
+        The path to the Parquet file containing the event.
+
+    Returns
+    -------
+    pd.DataFrame
+        The processed event as a DataFrame.
+    """
+    event = pd.read_parquet(path)
+    event["timestamp"] = pd.to_datetime(event["timestamp"])
+    event = event.set_index("timestamp", drop=True)
+    return event
+
+
+def version_string_to_number(version: str) -> str:
+    """
+    Converts a version string to a numeric representation.
+
+    Parameters
+    ----------
+    version : str
+        The version string to be converted.
+
+    Returns
+    -------
+    str
+        The numeric representation of the version string.
+    """
+    components = version.split(".")
+    version_number = (
+        int(components[0]) * 10000 + int(components[1]) * 100 + int(components[2])
+    )
+    return str(version_number)
