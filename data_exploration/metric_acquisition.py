@@ -105,7 +105,7 @@ class MetricAcquisition:
         return column.drop(extreme_indexes).mean()
 
     def get_table_all_columns_mean(
-        self, table: pd.DataFrame, extreme_index_range: int = 7
+        self, table: pd.DataFrame, extreme_index_range: int = 0
     ) -> pd.Series:
         """Calculates the mean of each variable of a DataFrame."""
         return table.apply(

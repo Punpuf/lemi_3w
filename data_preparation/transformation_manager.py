@@ -13,18 +13,34 @@ from constants import utils
 class TransformationManager:
     """Manages transformation of events present in a metadata table"""
 
+    __valid_pressure_range = (-1e10, 1e10)
+    __valid_temperature_range = (-1e3, 1e3)
+    __valid_flow_range = (-3, 3)
+
+    valid_num_attribs_range = {
+        "P-PDG": __valid_pressure_range,
+        "P-TPT": (-1e9, 1e9),
+        "T-TPT": __valid_temperature_range,
+        "P-MON-CKP": (-1e9, 1e9),
+        "T-JUS-CKP": __valid_temperature_range,
+        "P-JUS-CKGL": __valid_pressure_range,
+        "QGL": __valid_flow_range,
+    }
+
     TRANSFORMATION_NAME_PREFIX = "transform-isdt-"
-    # class that receives metadata table
 
-    # can call a prepration function
-    # fc will make a folder into which it will save the files after applying transformations
-    # fc will run a function over all the paths
-
-    # each processing function will apply the 3 transformation functions
-    # then save file to path
     def __init__(
         self, metadata_table: pd.DataFrame, output_folder_base_name: str
     ) -> None:
+        """Initialize the TransformationManager.
+
+        Parameters
+        ----------
+        metadata_table: pd.DataFrame
+            The metadata table containing event information.
+        output_folder_base_name: str
+            The base name for the output folder where transformed files will be saved.
+        """
         self.metadata_table = metadata_table
         self.folder_name = output_folder_base_name
         logging.debug(
@@ -41,8 +57,24 @@ class TransformationManager:
         avg_variable_mean: pd.Series,
         avg_variable_std_dev: pd.Series,
     ) -> None:
-        # create output directories
+        """Processes each event in the metadata table by imputing null values,
+        standardizing, and creating time window samples.
 
+        Parameters
+        ----------
+        output_parent_dir: Path
+            The parent directory where the transformed event data will be stored.
+        sample_interval_seconds: int
+            Desired interval for downsampling the event data.
+        num_timesteps_for_window: int
+            Number of timesteps to use for creating windowed samples.
+        avg_variable_mean: pd.Series
+            Calculated mean values for each variable based on a sample of events.
+        avg_variable_std_dev: pd.Series
+            Calculated std. deviation values for each variable based on a sample of events.
+        """
+
+        # create output directories
         output_dir: Path = (
             output_parent_dir / f"{self.TRANSFORMATION_NAME_PREFIX}{self.folder_name}"
         )
@@ -76,10 +108,37 @@ class TransformationManager:
         num_timesteps_for_window: int,
         avg_variable_mean: pd.Series,
         avg_variable_std_dev: pd.Series,
+        should_return: bool,
     ) -> None:
+        """Processes a single event by imputing null values, standardizing, and creating time window samples.
+
+        Parameters
+        ----------
+        event_input_path: str
+            Path to the event data.
+        event_grandparent_output_dir: Path
+            The grandparent directory where the transformed event data will be stored.
+        sample_interval_seconds: int
+            Desired interval for downsampling the event data.
+        num_timesteps_for_window: int
+            Number of timesteps to use for creating windowed samples.
+        avg_variable_mean: pd.Series
+            Calculated mean values for each variable based on a sample of events.
+        avg_variable_std_dev: pd.Series
+            Calculated standard deviation values for each variable based on a sample of events.
+        should_return: bool
+            Flag indicating whether to return the windowed event data.
+        """
         # get item
         event_input_path = Path(event_input_path)
         event = utils.get_event(event_input_path)
+
+        # skip event if its values aren't valid
+        if not TransformationManager.is_event_values_valid(event):
+            logging.info(
+                f"Skipping the following event due to invalid data: {event_input_path}"
+            )
+            return
 
         # lower sample rate
         downampled_event = TransformationManager.transform_event_with_downsample(
@@ -98,9 +157,9 @@ class TransformationManager:
         )
 
         # sin and cos transformation of the time stamp regarding time of day and year
+        # TODO implement
 
         # get time windows
-
         try:
             (
                 windowed_event_X,
@@ -112,6 +171,9 @@ class TransformationManager:
             raise ValueError(
                 f"Exception while to split_sequences_into_windows. Path is: {event_input_path}"
             )
+
+        if should_return:
+            return windowed_event_X, windowed_event_y
 
         # store results
         file_name = event_input_path.stem
@@ -139,7 +201,6 @@ class TransformationManager:
             Second array, represents y.
         storage_file_path: Path
             Path where the array pair was stored.
-
         """
 
         np.savez(storage_file_path, X=array_1, y=array_2)
@@ -161,6 +222,32 @@ class TransformationManager:
 
         arrays = np.load(storage_file_path)
         return arrays["X"], arrays["y"]
+
+    @staticmethod
+    def is_event_values_valid(event_data: pd.DataFrame) -> bool:
+        is_num_attribs_valid = all(
+            event_data[var].fillna(value=0).between(interval[0], interval[1]).all()
+            for var, interval in TransformationManager.valid_num_attribs_range.items()
+        )
+
+        # check if class is in permanent (0-8) or transient regime (101-108)
+        is_class_attrib_valid = (
+            event_data[module_constants.event_class_attrib]
+            .fillna(value=0)
+            .between(0, 8, inclusive="both")
+            + event_data[module_constants.event_class_attrib]
+            .fillna(value=0)
+            .between(101, 108, inclusive="both")
+        ).all()
+
+        is_timestamp_valid = (
+            pd.to_datetime(
+                event_data.index, format="%Y-%m-%d %H:%M:%S", errors="coerce"
+            )
+            .notnull()
+            .all()
+        )
+        return is_num_attribs_valid and is_class_attrib_valid and is_timestamp_valid
 
     @staticmethod
     def transform_event_with_imputation(
@@ -313,9 +400,6 @@ class TransformationManager:
             ]
         )
         output_sequece = np.array(event_data[module_constants.event_class_attrib])
-        # if output_sequece.dtype == object:
-        # logging.debug(f"sequence_output is {output_sequece[0:10]}")
-        # logging.debug(f"event data -> {event_data}")
 
         return TransformationManager.split_sequences_into_windows(
             input_sequences, output_sequece, num_timesteps

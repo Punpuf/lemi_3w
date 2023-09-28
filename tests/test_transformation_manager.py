@@ -8,6 +8,99 @@ import tempfile
 import shutil
 
 
+def test_is_event_values_valid():
+    valid_event_data = pd.DataFrame(
+        {
+            "P-PDG": [10, 11, 12, 13],
+            "P-TPT": [10, np.nan, 12, 13],
+            "T-TPT": [0, 1, 2, 3],
+            "P-MON-CKP": [30, 31, 32, 33],
+            "T-JUS-CKP": [30, 31, 32, 33],
+            "P-JUS-CKGL": [30, 31, 32, 33],
+            "QGL": [20, 21, 22, 23],
+            "class": [0, np.nan, 2, 2],
+        },
+        index=pd.to_datetime(
+            [
+                "2023-09-27 12:00:00",
+                "2023-09-27 12:00:01",
+                "2023-09-27 12:00:02",
+                "2023-09-27 12:00:03",
+            ]
+        ),
+    )
+    assert TransformationManager.is_event_values_valid(valid_event_data) == True
+
+    # missing timeseries
+    invalid_event_data1 = pd.DataFrame(
+        {
+            "P-PDG": [10, 11, 12, 13],
+            "P-TPT": [10, 11, 12, 13],
+            "T-TPT": [0, 1, 2, 3],
+            "P-MON-CKP": [30, 31, 32, 33],
+            "T-JUS-CKP": [30, 31, 32, 33],
+            "P-JUS-CKGL": [30, 31, 32, 33],
+            "QGL": [20, 21, 22, 23],
+            "class": [0, 0, 2, 2],
+        },
+        index=pd.to_datetime(
+            [
+                "2023-09-27 12:00:00",
+                "2023-09-27 12:00:01",
+                np.nan,
+                "2023-09-27 12:00:03",
+            ]
+        ),
+    )
+    assert TransformationManager.is_event_values_valid(invalid_event_data1) == False
+
+    # invalid class value
+    invalid_event_data2 = pd.DataFrame(
+        {
+            "P-PDG": [10, 11, 12, 13],
+            "P-TPT": [10, 11, 12, 13],
+            "T-TPT": [0, 1, 2, 3],
+            "P-MON-CKP": [30, 31, 32, 33],
+            "T-JUS-CKP": [30, 31, 32, 33],
+            "P-JUS-CKGL": [30, 31, 32, 33],
+            "QGL": [20, 21, 22, 23],
+            "class": [0, 0, 12, 12],
+        },
+        index=pd.to_datetime(
+            [
+                "2023-09-27 12:00:00",
+                "2023-09-27 12:00:01",
+                "2023-09-27 12:00:02",
+                "2023-09-27 12:00:03",
+            ]
+        ),
+    )
+    assert TransformationManager.is_event_values_valid(invalid_event_data2) == False
+
+    # out of range numeric values
+    valid_event_data3 = pd.DataFrame(
+        {
+            "P-PDG": [10, 11, 12, 13],
+            "P-TPT": [10, 11, 12, 13],
+            "T-TPT": [0, 1, 2, 3],
+            "P-MON-CKP": [2e30, 2e31, 2e32, 2e33],
+            "T-JUS-CKP": [30, 31, 32, 33],
+            "P-JUS-CKGL": [30, 31, 32, 33],
+            "QGL": [20, 21, 22, 23],
+            "class": [0, 0, 2, 2],
+        },
+        index=pd.to_datetime(
+            [
+                "2023-09-27 12:00:00",
+                "2023-09-27 12:00:01",
+                "2023-09-27 12:00:02",
+                "2023-09-27 12:00:03",
+            ]
+        ),
+    )
+    assert TransformationManager.is_event_values_valid(valid_event_data3) == False
+
+
 def test_transform_event_with_imputation():
     event_1_original = pd.DataFrame(
         {

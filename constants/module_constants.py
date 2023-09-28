@@ -9,6 +9,6 @@ event_num_attribs = [
     "QGL",
 ]
 event_time_attrib = ["timestamp"]
-event_class_attrib = ["class"]
+event_class_attrib = "class"
 
 num_class_types = 9
