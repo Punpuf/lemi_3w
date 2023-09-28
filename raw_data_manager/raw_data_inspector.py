@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("..")  # Allows imports from sibling directories
+
 from itertools import repeat
 from absl import logging
 import pandas as pd
@@ -7,7 +11,7 @@ import parallelbar
 import hashlib
 
 from raw_data_manager.models import EventMetadata, EventSource, EventClassType
-import raw_data_acquisition
+from raw_data_manager import raw_data_acquisition
 
 PARQUET_EXTENSION = ".parquet"
 NUMPY_ZIP_EXTENTION = ".npz"

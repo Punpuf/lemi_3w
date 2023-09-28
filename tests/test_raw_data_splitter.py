@@ -164,8 +164,8 @@ class TestRawDataSplitter:
         assert test_name == expected_test
 
     @patch("shutil.copy")
-    def test_move_file(self, mock_copy, raw_data_splitter):
-        raw_data_splitter.move_file(
+    def test_copy_file(self, mock_copy, raw_data_splitter):
+        raw_data_splitter.copy_file(
             "path/0/to_file.feather", pathlib.Path("output_dir")
         )
         mock_copy.assert_called_once_with(

@@ -17,7 +17,7 @@ def test_is_event_values_valid():
             "P-MON-CKP": [30, 31, 32, 33],
             "T-JUS-CKP": [30, 31, 32, 33],
             "P-JUS-CKGL": [30, 31, 32, 33],
-            "QGL": [20, 21, 22, 23],
+            "QGL": [1, 1, 1.5, 0.5],
             "class": [0, np.nan, 2, 2],
         },
         index=pd.to_datetime(
@@ -230,7 +230,7 @@ def test_transform_event_with_downsample():
             "P-PDG": [38265830.0] * 10,
             "P-TPT": [13654450.0] * 10,
             "T-TPT": [
-                117.8,
+                117.0,
                 118.0,
                 119.0,
                 118.0,

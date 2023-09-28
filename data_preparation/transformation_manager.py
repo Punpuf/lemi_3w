@@ -2,12 +2,12 @@ from absl import logging
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from constants import module_constants
 from typing import Tuple
 from tensorflow import keras
 from parallelbar import progress_starmap
 from itertools import repeat
-from constants import utils
+
+from raw_data_manager import raw_data_acquisition
 from raw_data_manager.models import EventClassType, EventParameters
 
 
@@ -132,7 +132,7 @@ class TransformationManager:
         """
         # get item
         event_input_path = Path(event_input_path)
-        event = utils.get_event(event_input_path)
+        event = raw_data_acquisition.get_event(event_input_path)
 
         # skip event if its values aren't valid
         if not TransformationManager.is_event_values_valid(event):
@@ -446,9 +446,7 @@ class TransformationManager:
         y[y >= 100] = y[y >= 100] - 100  # 100 is the constant for transient annomalies
 
         try:
-            y = keras.utils.to_categorical(
-                y, num_classes=module_constants.num_class_types
-            )
+            y = keras.utils.to_categorical(y, num_classes=len(EventClassType))
         except Exception:
             raise ValueError(
                 f"Exception while to categorical. Present values: {np.unique(y)}"

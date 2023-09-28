@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("..")  # Allows imports from sibling directories
+sys.path.append(".")  # Allows imports from sibling directories
 
 from absl import logging
 from git.repo.base import Repo
@@ -14,7 +14,8 @@ import configparser
 import re
 import os
 
-from constants import storage_config, utils
+from constants import storage_config
+from raw_data_manager.git_remote_progress import GitRemoteProgress
 
 URL_3W_REPO = storage_config.URL_3W_REPO
 URL_3W_CONFIG_FILE = storage_config.URL_3W_DATASET_CONFIG_FILE
@@ -287,7 +288,7 @@ def download_3w_repo(download_url: str, path_downloaded_repo: str) -> None:
     Repo.clone_from(
         url=download_url,
         to_path=path_downloaded_repo,
-        progress=utils.GitRemoteProgress(),
+        progress=GitRemoteProgress(),
     )
 
 

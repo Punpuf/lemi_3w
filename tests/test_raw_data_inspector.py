@@ -2,9 +2,10 @@ import sys
 
 sys.path.append("..")  # Allows imports from sibling directories
 
+from raw_data_manager import raw_data_inspector
 from raw_data_manager.raw_data_inspector import RawDataInspector, get_anomaly_metadata
 from raw_data_manager.models import EventMetadata, EventSource, EventClassType
-from constants import utils
+from raw_data_manager import raw_data_acquisition
 from pathlib import Path
 import tempfile
 import pandas as pd
@@ -50,7 +51,9 @@ def test_get_anomaly_metadata():
 
     # Check if metadata contents are correct
     expected_metadata_real = EventMetadata(
-        hash_id=utils.sha256sum(f"{anomaly_class_type}/{anomaly_file_real.stem}"),
+        hash_id=raw_data_inspector.sha256sum(
+            f"{anomaly_class_type}/{anomaly_file_real.stem}"
+        ),
         class_type=EventClassType(anomaly_class_type).name,
         source=EventSource.REAL.name,
         well_id=1,
@@ -60,7 +63,9 @@ def test_get_anomaly_metadata():
         num_timesteps=3,
     )
     expected_metadata_simu = EventMetadata(
-        hash_id=utils.sha256sum(f"{anomaly_class_type}/{anomaly_file_simu.stem}"),
+        hash_id=raw_data_inspector.sha256sum(
+            f"{anomaly_class_type}/{anomaly_file_simu.stem}"
+        ),
         class_type=EventClassType(anomaly_class_type).name,
         source=EventSource.SIMULATED.name,
         path=str(anomaly_file_simu),
@@ -68,7 +73,9 @@ def test_get_anomaly_metadata():
         num_timesteps=3,
     )
     expected_metadata_draw = EventMetadata(
-        hash_id=utils.sha256sum(f"{anomaly_class_type}/{anomaly_file_draw.stem}"),
+        hash_id=raw_data_inspector.sha256sum(
+            f"{anomaly_class_type}/{anomaly_file_draw.stem}"
+        ),
         class_type=EventClassType(anomaly_class_type).name,
         source=EventSource.HAND_DRAWN.name,
         path=str(anomaly_file_draw),

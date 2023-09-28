@@ -2,11 +2,12 @@ import sys
 
 sys.path.append("..")  # Allows imports from sibling directories
 
-import pandas as pd
-import numpy as np
 from absl import logging
 from parallelbar import progress_map, progress_starmap
 from itertools import repeat
+from typing import Callable
+import pandas as pd
+import numpy as np
 import pickle
 
 from constants import storage_config
@@ -289,7 +290,7 @@ class MetricAcquisition:
 
     @staticmethod
     def save_retrieve_object(
-        file_name: str, funct: function, arg_list: list = [], use_cached: bool = True
+        file_name: str, funct: Callable, arg_list: list = [], use_cached: bool = True
     ) -> any:
         """Intermediates a function call, its results can be quickly retrieved from cache.
 
