@@ -46,8 +46,9 @@ def display_entire_event(
     """
 
     # Create subplots
+    variables_in_use = [x for x in event_data.columns if x in EventParameters.event_num_attribs]
     fig, axs = plt.subplots(
-        len(EventParameters.event_num_attribs), 1, sharex="col", figsize=(15, 22)
+        len(variables_in_use), 1, sharex="col", figsize=(15, 22)
     )
     fig.suptitle(
         f"Variação das variáveis de um evento com classe {class_type_name} ao longo do tempo."
@@ -57,7 +58,7 @@ def display_entire_event(
     )
 
     # Populate subplots
-    for column_name, ax in zip(EventParameters.event_num_attribs, axs.flatten()):
+    for column_name, ax in zip(variables_in_use, axs.flatten()):
         generate_event_variable_subplot(
             event_data[column_name],
             event_data.index,
@@ -68,12 +69,12 @@ def display_entire_event(
             language=language,
             ax=ax,
         )
-    plt.title(
-        f"Variação das variáveis de um evento com classe {class_type_name} ao longo do tempo."
-        if language == "pt"
-        else f"Variation of the variables of an event of type {class_type_name} along time."
-    )
-    plt.subplots_adjust(top=30)
+    # plt.title(
+    #     f"Variação das variáveis de um evento com classe {class_type_name} ao longo do tempo."
+    #     if language == "pt"
+    #     else f"Variation of the variables of an event of type {class_type_name} along time."
+    # )
+    # plt.subplots_adjust(top=30)
 
     # Add legends
     handles, labels = axs[0].get_legend_handles_labels()

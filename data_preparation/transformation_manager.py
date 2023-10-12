@@ -2,8 +2,7 @@ from absl import logging
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Tuple
-from tensorflow import keras
+from typing import Tuple, List
 from parallelbar import progress_starmap
 from itertools import repeat
 
@@ -53,6 +52,7 @@ class TransformationManager:
     def apply_transformations_to_table(
         self,
         output_parent_dir: Path,
+        selected_variables: List[str],
         sample_interval_seconds: int,
         num_timesteps_for_window: int,
         avg_variable_mean: pd.Series,
@@ -65,6 +65,8 @@ class TransformationManager:
         ----------
         output_parent_dir: Path
             The parent directory where the transformed event data will be stored.
+        selected_variables: List[str]
+            Variables to be used. Variables not in this list will be discarted.
         sample_interval_seconds: int
             Desired interval for downsampling the event data.
         num_timesteps_for_window: int
@@ -93,6 +95,7 @@ class TransformationManager:
             zip(
                 events_path,
                 repeat(output_dir),
+                repeat(selected_variables),
                 repeat(sample_interval_seconds),
                 repeat(num_timesteps_for_window),
                 repeat(avg_variable_mean),
@@ -105,11 +108,11 @@ class TransformationManager:
     def apply_transformations_to_event(
         event_input_path: str,
         event_grandparent_output_dir: Path,
+        selected_variables: List[str],
         sample_interval_seconds: int,
         num_timesteps_for_window: int,
         avg_variable_mean: pd.Series,
         avg_variable_std_dev: pd.Series,
-        should_return: bool,
     ) -> None:
         """Processes a single event by imputing null values, standardizing, and creating time window samples.
 
@@ -119,6 +122,8 @@ class TransformationManager:
             Path to the event data.
         event_grandparent_output_dir: Path
             The grandparent directory where the transformed event data will be stored.
+        selected_variables: List[str]
+            Variables to be used. Variables not in this list will be discarted.
         sample_interval_seconds: int
             Desired interval for downsampling the event data.
         num_timesteps_for_window: int
@@ -133,6 +138,7 @@ class TransformationManager:
         # get item
         event_input_path = Path(event_input_path)
         event = raw_data_acquisition.get_event(event_input_path)
+        event = event[selected_variables]
 
         # skip event if its values aren't valid
         if not TransformationManager.is_event_values_valid(event):
@@ -173,9 +179,6 @@ class TransformationManager:
                 f"Exception while to split_sequences_into_windows. Path is: {event_input_path}"
             )
 
-        if should_return:
-            return windowed_event_X, windowed_event_y
-
         # store results
         file_name = event_input_path.stem
         output_path = (
@@ -187,6 +190,8 @@ class TransformationManager:
         TransformationManager.store_pair_array(
             windowed_event_X, windowed_event_y, output_path
         )
+
+        return windowed_event_X, windowed_event_y
 
     @staticmethod
     def store_pair_array(
@@ -229,6 +234,7 @@ class TransformationManager:
         is_num_attribs_valid = all(
             event_data[var].fillna(value=0).between(interval[0], interval[1]).all()
             for var, interval in TransformationManager.valid_num_attribs_range.items()
+            if var in event_data.columns
         )
 
         # check if class is in permanent (0-8) or transient regime (101-108)
@@ -280,12 +286,11 @@ class TransformationManager:
             Data of the event transformed by imputing its null values.
         """
 
-        event_data[EventParameters.event_num_attribs] = (
-            event_data[EventParameters.event_num_attribs]
-            .interpolate()
-            .ffill()
-            .bfill()
-            .fillna(0)
+        numeric_variables = [
+            x for x in event_data.columns if x in EventParameters.event_num_attribs
+        ]
+        event_data[numeric_variables] = (
+            event_data[numeric_variables].interpolate().ffill().bfill().fillna(0)
         )
         event_data[EventParameters.event_class_attrib] = (
             event_data[EventParameters.event_class_attrib]
@@ -324,9 +329,12 @@ class TransformationManager:
         def standardize(x):
             return (x - avg_variable_mean[x.name]) / avg_variable_std_dev[x.name]
 
-        event_data[EventParameters.event_num_attribs] = event_data[
-            EventParameters.event_num_attribs
-        ].apply(lambda x: standardize(x), axis=0)
+        numeric_variables = [
+            x for x in event_data.columns if x in EventParameters.event_num_attribs
+        ]
+        event_data[numeric_variables] = event_data[numeric_variables].apply(
+            lambda x: standardize(x), axis=0
+        )
         return event_data
 
     @staticmethod
@@ -351,8 +359,11 @@ class TransformationManager:
             Data of the event transformed by downsampling its values.
         """
 
+        numeric_variables = [
+            x for x in event_data.columns if x in EventParameters.event_num_attribs
+        ]
         resampled_numeric_data = (
-            event_data[EventParameters.event_num_attribs]
+            event_data[numeric_variables]
             .resample(f"{sample_interval_seconds}s", origin="start", closed="left")
             .mean()
         )
@@ -390,13 +401,12 @@ class TransformationManager:
         """
 
         num_rows = event_data.shape[0]
-        numeric_column_name_list = event_data[EventParameters.event_num_attribs].columns
+        numeric_variables = [
+            x for x in event_data.columns if x in EventParameters.event_num_attribs
+        ]
 
         input_sequences = np.hstack(
-            [
-                np.array(event_data[c]).reshape((num_rows, 1))
-                for c in numeric_column_name_list
-            ]
+            [np.array(event_data[c]).reshape((num_rows, 1)) for c in numeric_variables]
         )
         output_sequece = np.array(event_data[EventParameters.event_class_attrib])
 
@@ -446,7 +456,27 @@ class TransformationManager:
         y[y >= 100] = y[y >= 100] - 100  # 100 is the constant for transient annomalies
 
         try:
-            y = keras.utils.to_categorical(y, num_classes=len(EventClassType))
+            y = np.array(y, dtype="int")
+
+            # From keras.utils.to_categorical
+            num_classes = len(EventClassType)
+            input_shape = y.shape
+
+            # Shrink the last dimension if the shape is (..., 1).
+            if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
+                input_shape = tuple(input_shape[:-1])
+
+            y = y.reshape(-1)
+            if not num_classes:
+                num_classes = np.max(y) + 1
+
+            n = y.shape[0]
+            categorical = np.zeros((n, num_classes), dtype="int")
+            categorical[np.arange(n), y] = 1
+
+            output_shape = input_shape + (num_classes,)
+            y = np.reshape(categorical, output_shape)
+
         except Exception:
             raise ValueError(
                 f"Exception while to categorical. Present values: {np.unique(y)}"

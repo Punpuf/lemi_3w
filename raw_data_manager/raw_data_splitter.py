@@ -47,6 +47,7 @@ class RawDataSplitter:
     def stratefy_split_of_data(
         self,
         data_dir: pathlib.Path,
+        validation_size: float,
         test_size: float,
         class_types: list[models.EventClassType] = None,
         sources: list[models.EventSource] = None,
@@ -59,6 +60,8 @@ class RawDataSplitter:
         ----------
         data_dir : pathlib.Path
             The root directory where the split data will be saved.
+        validation_size : float
+            The proportion of the dataset to include in the validation set.
         test_size : float
             The proportion of the dataset to include in the test set.
         class_types : list of models.EventClassType, optional
@@ -92,20 +95,27 @@ class RawDataSplitter:
             ]
 
         # divide filtered data
-        train_path_list, test_path_list = self.get_split_path_division(
-            filtered_metadata_table, test_size
+        (
+            train_path_list,
+            validation_path_list,
+            test_path_list,
+        ) = self.get_split_path_division(
+            filtered_metadata_table, validation_size, test_size
         )
         logging.debug(
-            f"size of train data: {len(train_path_list)} --- size of test data: {len(test_path_list)}"
+            f"size of train data: {len(train_path_list)}. val: {len(validation_path_list)}. test: {len(test_path_list)}"
         )
 
         # define name of output directories
-        split_name_train, split_name_test = self.get_split_name(
+        split_name_train, split_name_validation, split_name_test = self.get_split_name(
             test_size, class_types, sources, well_ids
         )
         train_dir_path = data_dir / split_name_train
+        validation_dir_path = data_dir / split_name_validation
         test_dir_path = data_dir / split_name_test
-        logging.debug(f"train path {train_dir_path} --- test path {test_dir_path}")
+        logging.debug(
+            f"train path {train_dir_path} -/- val: {validation_dir_path} -/- test: {test_dir_path}"
+        )
 
         # creates folders for coming event files
         self.create_class_type_subdirectories(train_dir_path)
@@ -115,28 +125,40 @@ class RawDataSplitter:
         self.copy_files_to_path(train_path_list, train_dir_path)
         self.copy_files_to_path(test_path_list, test_dir_path)
 
-        return train_dir_path, test_dir_path
+        # for validation
+        if len(validation_path_list) > 0:
+            self.create_class_type_subdirectories(validation_dir_path)
+            self.copy_files_to_path(validation_path_list, validation_dir_path)
+
+        return train_dir_path, validation_dir_path, test_dir_path
 
     @staticmethod
     def get_split_path_division(
         metadata_table: pd.DataFrame,
+        validation_size: float,
         test_size: float,
     ) -> Tuple[List[str], List[str]]:
         """
-        Splits the metadata into train and test paths in a stratified manner.
+        Splits the metadata into train, validation and test paths in a stratified manner.
 
         Parameters
         ----------
         metadata_table : pd.DataFrame
             The metadata table containing event information.
+        validation_size : float
+            The proportion of the dataset to include in the validation set.
         test_size : float
             The proportion of the dataset to include in the test set.
 
         Returns
         -------
-        Tuple[List[str], List[str]]
-            Paths for train and test data.
+        Tuple[List[str], List[str]], List[str]]
+            Paths for train, validation and test data.
         """
+
+        train_path_list = []
+        validation_path_list = []
+        test_path_list = []
 
         train, test, _, _ = train_test_split(
             metadata_table,
@@ -146,7 +168,27 @@ class RawDataSplitter:
             stratify=metadata_table[["source", "class_type"]],
         )
 
-        return train["path"].tolist(), test["path"].tolist()
+        if validation_size > 0:
+            logging.debug(f"validation_size {validation_size}")
+            train, validation, _, _ = train_test_split(
+                train,
+                train,
+                test_size=(validation_size / (1 - test_size)),
+                random_state=1331,
+                stratify=train[["source", "class_type"]],
+            )
+            train_path_list = train["path"].tolist()
+            validation_path_list = validation["path"].tolist()
+        else:
+            train_path_list = train["path"].tolist()
+
+        test_path_list = test["path"].tolist()
+
+        return (
+            train_path_list,
+            validation_path_list,
+            test_path_list,
+        )
 
     @staticmethod
     def __get_source_name(sources: list[models.EventSource] = None) -> str:
@@ -238,7 +280,7 @@ class RawDataSplitter:
         class_types: list[models.EventClassType] = None,
         sources: list[models.EventSource] = None,
         well_ids: list[int] = None,
-    ) -> Tuple[str, str]:
+    ) -> Tuple[str, str, str]:
         """
         Returns a name describing the modifications made to the data, used as output folder name.
 
@@ -266,9 +308,10 @@ class RawDataSplitter:
         split_name += "well-" + self.__get_well_ids_name(well_ids) + "_"
 
         split_name_train = split_name + "train"
+        split_name_validation = split_name + "validation"
         split_name_test = split_name + "test"
 
-        return split_name_train, split_name_test
+        return split_name_train, split_name_validation, split_name_test
 
     @staticmethod
     def create_class_type_subdirectories(directory_path: str) -> None:
