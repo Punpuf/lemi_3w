@@ -483,3 +483,18 @@ class TransformationManager:
             )
 
         return np.array(X), np.array(y)
+
+    @staticmethod
+    def data_generator_loop(file_path_list):
+        """Generator returning batches of data for each file path"""
+        while True:
+            for file_path in file_path_list:
+                X, y = TransformationManager.retrieve_pair_array(Path(file_path))
+                yield X, y
+
+    @staticmethod
+    def data_generator_non_loop(file_path_list):
+        """Generator returning batches of data for each file path"""
+        for file_path in file_path_list:
+            X, y = TransformationManager.retrieve_pair_array(Path(file_path))
+            yield X, y
