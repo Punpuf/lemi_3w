@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import matplotlib.dates as plot_dates
+import seaborn as sns
 import numpy as np
 import pandas as pd
+from typing import List
 
 from raw_data_manager.models import EventParameters
 
@@ -22,9 +24,22 @@ def class_is_normal(class_id: int) -> bool:
     return class_id == 0
 
 
+def prepare_prediction_array(
+    predictions: np.array, window_size: int, subsample_rate: int
+):
+    num_prediction_classes = predictions.shape[1]
+    predictions = np.insert(
+        predictions, 0, np.empty((window_size - 1, num_prediction_classes)), axis=0
+    )
+    predictions = np.repeat(predictions, subsample_rate, axis=0)
+    return predictions
+
+
 def display_entire_event(
     event_data: pd.DataFrame,
     class_type_name: str,
+    prediction_data: np.array,
+    prediction_labels: List,
     show_interpolate: bool = False,
     interpolate_type: bool = "linear",
     language: str = "pt",
@@ -44,11 +59,14 @@ def display_entire_event(
     language: str, optional
         The language for plot labels, "pt" or "en", by default "pt".
     """
+    sns.set(style="darkgrid")
 
     # Create subplots
-    variables_in_use = [x for x in event_data.columns if x in EventParameters.event_num_attribs]
+    variables_in_use = [
+        x for x in event_data.columns if x in EventParameters.event_num_attribs
+    ]
     fig, axs = plt.subplots(
-        len(variables_in_use), 1, sharex="col", figsize=(15, 22)
+        len(variables_in_use) + 1, 1, sharex="col", figsize=(15, 22)
     )
     fig.suptitle(
         f"Variação das variáveis de um evento com classe {class_type_name} ao longo do tempo."
@@ -69,12 +87,6 @@ def display_entire_event(
             language=language,
             ax=ax,
         )
-    # plt.title(
-    #     f"Variação das variáveis de um evento com classe {class_type_name} ao longo do tempo."
-    #     if language == "pt"
-    #     else f"Variation of the variables of an event of type {class_type_name} along time."
-    # )
-    # plt.subplots_adjust(top=30)
 
     # Add legends
     handles, labels = axs[0].get_legend_handles_labels()
@@ -89,6 +101,20 @@ def display_entire_event(
     )
     for text in legend.get_texts():
         text.set_fontsize(14)
+
+    # Predictions
+    for i in range(len(prediction_labels)):
+        sns.lineplot(
+            x=event_data.index,
+            y=prediction_data[:, i],
+            label=prediction_labels[i],
+            ax=axs[-1],
+        )
+
+    axs[-1].set_xlabel("Tempo")
+    axs[-1].set_ylabel("Probabilidade (%)")
+    axs[-1].set_title("Predições do modelo treinado")
+    axs[-1].legend(loc="upper left", fontsize="xx-small")
 
     # Show figure
     plt.tight_layout()
