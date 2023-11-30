@@ -28,5 +28,7 @@ template/
 
 poetry
 pyvenv.cfg
-.cache/
+.cache*/
 test_notebook.ipynb
+garbage/
+logs/
